@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "sdrf_convert"
+version = "0.0.1"
+requires-python = ">=3.11"
+
+dependencies = [
+    "pandas >= 2, < 3"
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pylint"
+]
+
+

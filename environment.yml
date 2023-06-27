@@ -1,0 +1,10 @@
+name: sdrf_convert
+channels:
+  # list used channels to make sure it works with micromamba
+  - defaults
+dependencies:
+  - python=3.11
+  - setuptools
+  - pip
+  - pip:
+    - -e .[dev]
