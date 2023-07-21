@@ -149,6 +149,42 @@ class AbstractConverter:
             ontology_dict[elem_split[0].strip()] = elem_split[1].strip()
 
         return ontology_dict
+    
+    @classmethod
+    def get_column_types(cls, sdrf: StringIO) -> Dict[str, List[Type]]:
+        """
+        Reads the header and assigns the correct dtypes to the columns even if the column name
+        is used multiple times (which ends up with a suffix (.1, .2, ...) in the dataframe column name).
+
+        Parameters
+        ----------
+        sdrf : StringIO
+            SDRF file as StringIO object
+        
+        Returns
+        -------
+        Dict[str, List[Type]]
+            Column names (key) and dtypes (value)
+        """
+        column_ctr = defaultdict(int)
+
+        for line in sdrf:
+            line = line.strip()
+            if line == "":
+                continue
+            columns = line.split(SDRF_CELL_SEPARATOR)
+            for column in columns:
+                column = column.strip()
+                column_ctr[column] += 1
+            break
+
+        column_types: Dict[str, List[Type]] = {}
+        for column, ctr in column_ctr.items():
+            column_types[column] = cls.COLUMN_PROPERTIES[column][0]
+            if ctr > 1:
+                for i in range(ctr):
+                    column_types[f"{column}.{i+1}"] = cls.COLUMN_PROPERTIES[column][0]
+        return column_types
 
     @classmethod
     def get_column_types(cls, sdrf: StringIO) -> Dict[str, List[Type]]:
