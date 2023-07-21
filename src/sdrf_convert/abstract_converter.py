@@ -3,7 +3,8 @@ Abstract class for SDRF file converters.
 """
 
 # std imports
-from io import IOBase
+from collections import defaultdict
+from io import IOBase, StringIO, BytesIO
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Set, Type, Union
 
@@ -143,6 +144,42 @@ class AbstractConverter:
             ontology_dict[elem_split[0].strip()] = elem_split[1].strip()
 
         return ontology_dict
+    
+    @classmethod
+    def get_column_types(cls, sdrf: StringIO) -> Dict[str, List[Type]]:
+        """
+        Reads the header and assigns the correct dtypes to the columns even if the column name
+        is used multiple times (which ends up with a suffix (.1, .2, ...) in the dataframe column name).
+
+        Parameters
+        ----------
+        sdrf : StringIO
+            SDRF file as StringIO object
+        
+        Returns
+        -------
+        Dict[str, List[Type]]
+            Column names (key) and dtypes (value)
+        """
+        column_ctr = defaultdict(int)
+
+        for line in sdrf:
+            line = line.strip()
+            if line == "":
+                continue
+            columns = line.split(SDRF_CELL_SEPARATOR)
+            for column in columns:
+                column = column.strip()
+                column_ctr[column] += 1
+            break
+
+        column_types: Dict[str, List[Type]] = {}
+        for column, ctr in column_ctr.items():
+            column_types[column] = cls.COLUMN_PROPERTIES[column][0]
+            if ctr > 1:
+                for i in range(ctr):
+                    column_types[f"{column}.{i+1}"] = cls.COLUMN_PROPERTIES[column][0]
+        return column_types
 
     @classmethod
     def read_sdrf(cls, sdrf: Union[pd.DataFrame, IOBase, Path]) -> pd.DataFrame:
@@ -169,13 +206,22 @@ class AbstractConverter:
             # Return SDRF DataFrame
             return sdrf
         # Convert to DataFrame
+        column_types: Dict[str, List[Type]] = {}
+
+        if isinstance(sdrf, Path):
+            with sdrf.open("r") as sdrf_file:
+                column_types = cls.get_column_types(sdrf_file)
+        elif isinstance(sdrf, BytesIO):
+            sdrf_bytes = sdrf.read()
+            sdrf_str_io = StringIO(sdrf_bytes.decode("utf-8"))
+            column_types = cls.get_column_types(sdrf_str_io)
+        else:
+            column_types = cls.get_column_types(sdrf)
+
         return pd.read_csv(
             sdrf,
             sep=SDRF_CELL_SEPARATOR,
-            dtype={
-                col: dtypes[0]
-                for col, dtypes in cls.COLUMN_PROPERTIES.items()
-            } # Use the first accepted dtype for each column
+            dtype=column_types
         )
 
     def init_converter(self, sdrf: Union[pd.DataFrame, IOBase, Path]):
