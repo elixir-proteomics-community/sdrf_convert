@@ -98,7 +98,7 @@ class AbstractConverter:
             If column dtype is not correct
         """
         present_optional_columns: Set[str] = set()
-        for org_col_name, col_types in cls.COLUMN_PROPERTIES.items():
+        for org_col_name, col_types in cls.OPTIONAL_COLUMN_PROPERTIES.items():
             col_names: List[str] = cls.find_columns(sdrf_df, org_col_name)
             for col_name in col_names:
                 if col_name in sdrf_df.columns:
