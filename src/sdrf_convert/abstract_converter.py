@@ -175,10 +175,13 @@ class AbstractConverter:
 
         column_types: Dict[str, List[Type]] = {}
         for column, ctr in column_ctr.items():
-            column_types[column] = cls.COLUMN_PROPERTIES[column][0]
-            if ctr > 1:
-                for i in range(ctr):
-                    column_types[f"{column}.{i+1}"] = cls.COLUMN_PROPERTIES[column][0]
+            if column in cls.COLUMN_PROPERTIES.keys():
+                column_types[column] = cls.COLUMN_PROPERTIES[column][0]
+                if ctr > 1:
+                    for i in range(ctr):
+                        column_types[f"{column}.{i+1}"] = cls.COLUMN_PROPERTIES[column][0]
+                else:
+                    pass
         return column_types
 
     @classmethod
