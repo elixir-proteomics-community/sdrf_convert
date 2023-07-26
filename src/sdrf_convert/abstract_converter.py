@@ -149,7 +149,7 @@ class AbstractConverter:
             ontology_dict[elem_split[0].strip()] = elem_split[1].strip()
 
         return ontology_dict
-    
+
     @classmethod
     def get_column_types(cls, sdrf: StringIO) -> Dict[str, List[Type]]:
         """
@@ -160,7 +160,7 @@ class AbstractConverter:
         ----------
         sdrf : StringIO
             SDRF file as StringIO object
-        
+
         Returns
         -------
         Dict[str, List[Type]]
