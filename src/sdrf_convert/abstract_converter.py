@@ -172,14 +172,16 @@ class AbstractConverter:
                 column = column.strip()
                 column_ctr[column] += 1
             break
-
+        
+        # create a dictionary with required and optional columns
+        req_opt_columns_dict: Dict[str, List[Type]] = {**cls.COLUMN_PROPERTIES, **cls.OPTIONAL_COLUMN_PROPERTIES}
         column_types: Dict[str, List[Type]] = {}
         for column, ctr in column_ctr.items():
-            if column in cls.COLUMN_PROPERTIES.keys():
-                column_types[column] = cls.COLUMN_PROPERTIES[column][0]
+            if column in req_opt_columns_dict.keys():
+                column_types[column] = req_opt_columns_dict[column][0]
                 if ctr > 1:
                     for i in range(ctr):
-                        column_types[f"{column}.{i+1}"] = cls.COLUMN_PROPERTIES[column][0]
+                        column_types[f"{column}.{i+1}"] = req_opt_columns_dict[column][0]
                 else:
                     pass
         return column_types
