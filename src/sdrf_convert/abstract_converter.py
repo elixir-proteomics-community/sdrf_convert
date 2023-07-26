@@ -15,6 +15,7 @@ SDRF_CELL_SEPARATOR: str = "\t"
 """Separator used in SDRF file
 """
 
+
 class AbstractConverter:
     """
     Abstract class for SDRF file converters.
@@ -75,7 +76,8 @@ class AbstractConverter:
             col_names: List[str] = cls.find_columns(sdrf_df, col_name)
             for col_name in col_names:
                 if not col_name in sdrf_df.columns:
-                    raise ValueError(f"Column `{col_name}` not found in SDRF file")
+                    raise ValueError(
+                        f"Column `{col_name}` not found in SDRF file")
                 if not sdrf_df[col_name].dtype in col_types:
                     raise TypeError((
                         f"Column `{col_name}` has wrong type. "
@@ -144,7 +146,7 @@ class AbstractConverter:
             ontology_dict[elem_split[0].strip()] = elem_split[1].strip()
 
         return ontology_dict
-    
+
     @classmethod
     def get_column_types(cls, sdrf: StringIO) -> Dict[str, List[Type]]:
         """
@@ -155,7 +157,7 @@ class AbstractConverter:
         ----------
         sdrf : StringIO
             SDRF file as StringIO object
-        
+
         Returns
         -------
         Dict[str, List[Type]]
@@ -172,12 +174,13 @@ class AbstractConverter:
                 column = column.strip()
                 column_ctr[column] += 1
             break
-        
+
         # create a dictionary with required and optional columns
-        req_opt_columns_dict: Dict[str, List[Type]] = {**cls.COLUMN_PROPERTIES, **cls.OPTIONAL_COLUMN_PROPERTIES}
+        req_opt_columns_dict: Dict[str, List[Type]] = {
+            **cls.COLUMN_PROPERTIES, **cls.OPTIONAL_COLUMN_PROPERTIES}
         column_types: Dict[str, List[Type]] = {}
         for column, ctr in column_ctr.items():
-            if column in req_opt_columns_dict.keys():
+            if column in req_opt_columns_dict:
                 column_types[column] = req_opt_columns_dict[column][0]
                 if ctr > 1:
                     for i in range(ctr):
@@ -237,7 +240,7 @@ class AbstractConverter:
         (It is intentionally not the constructor so it is easier
         to call the convert methods multiple time
         for different SDRF with the same converter settings. This could also be a set-property)
-        
+
         Raises
         ------
         ValueError
@@ -249,8 +252,8 @@ class AbstractConverter:
         self.present_optional_columns = set()
         self.sdrf_df = self.read_sdrf(sdrf)
         self.check_necessary_columns_and_types(self.sdrf_df)
-        self.present_optional_columns = self.check_optional_columns_and_types(self.sdrf_df)
-
+        self.present_optional_columns = self.check_optional_columns_and_types(
+            self.sdrf_df)
 
     def convert(self, sdrf: Union[pd.DataFrame, IOBase, Path]) -> Any:
         """
@@ -264,4 +267,5 @@ class AbstractConverter:
             The converted SDRF file
         """
         self.init_converter(sdrf)
-        raise NotImplementedError("Method convert() not implemented for AbstractConverter")
+        raise NotImplementedError(
+            "Method convert() not implemented for AbstractConverter")
