@@ -9,6 +9,7 @@ from typing import Any, ClassVar, Dict, List, Set, Type, Union
 
 # 3rd party imports
 import pandas as pd
+from pyteomics import mass
 
 SDRF_CELL_SEPARATOR: str = "\t"
 """Separator used in SDRF file
@@ -38,6 +39,7 @@ class AbstractConverter:
 
         self.sdrf_df: pd.DataFrame = pd.DataFrame()
         self.present_optional_columns: Set[str] = set()
+        self.unimod_db: mass.Unimod = None
 
     @classmethod
     def find_columns(cls, sdrf_df: pd.DataFrame, col_name: str) -> List[str]:
@@ -177,6 +179,31 @@ class AbstractConverter:
                 for col, dtypes in cls.COLUMN_PROPERTIES.items()
             } # Use the first accepted dtype for each column
         )
+    
+    def get_unimod_from_NT(self, nt_entry: str) -> Dict[str, Any]:
+        """
+        Uses the given nt_entry for a query to Unimod (by pyteomics) and
+        returns the resulting entry, or an empty record, if no corresponding
+        entry was found in Unimod
+
+        Parameters
+        ----------
+        nt_entry : str
+            The title of the modification, like Oxidation (given by NT in the SDRF columns)
+
+        Returns
+        -------
+        Dict[str, Any]:
+            an Unimod entry
+        """
+        if self.unimod_db == None:
+            self.unimod_db = mass.Unimod()
+        
+        mod = self.unimod_db.by_title(nt_entry)
+        if (len(mod) == 0) :
+            mod = self.unimod_db.by_name(nt_entry)
+        
+        return mod
 
     def init_converter(self, sdrf: Union[pd.DataFrame, IOBase, Path]):
         """
