@@ -7,7 +7,9 @@ version = "0.0.1"
 requires-python = ">=3.11"
 
 dependencies = [
-    "pandas >= 2, < 3"
+    "pandas >= 2, < 3",
+    "pyteomics" >= 4,
+    "lxml" >= 4
 ]
 
 
