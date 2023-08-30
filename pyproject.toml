@@ -8,8 +8,8 @@ requires-python = ">=3.11"
 
 dependencies = [
     "pandas >= 2, < 3",
-    "pyteomics" >= 4,
-    "lxml" >= 4
+    "pyteomics >= 4, < 5",
+    "lxml >= 4, < 5"
 ]
 
 
