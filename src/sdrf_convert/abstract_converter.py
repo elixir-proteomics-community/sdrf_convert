@@ -3,6 +3,7 @@ Abstract class for SDRF file converters.
 """
 
 # std imports
+import argparse
 from collections import defaultdict
 from io import IOBase, StringIO, BytesIO
 from pathlib import Path
@@ -295,5 +296,49 @@ class AbstractConverter:
             The converted SDRF file
         """
         self.init_converter(sdrf)
-        raise NotImplementedError(
-            "Method convert() not implemented for AbstractConverter")
+        raise NotImplementedError("Method convert() not implemented for AbstractConverter")
+    
+    @classmethod
+    def convert_via_cli(cli_args: argparse.Namespace):
+        """Uses the CLI arguments convert a SDRF file to the tool config.
+        Example for an implemented subclass:
+        ```python
+        
+        def convert_via_cli(cli_args: argparse.Namespace):
+            sdrf_path = Path(cli_args.sdrf)
+            positional_arg1 = cli_args.positional_arg1
+            converter = ToolConverter(positional_arg1)
+            converter.convert(sdrf_path)
+        ```
+
+        Parameters
+        ----------
+        cli_args : argparse.Namespace
+            Collected CLI arguments
+        """
+        raise NotImplementedError("Method convert_via_cli() not implemented for AbstractConverter")
+    
+    @classmethod
+    def add_cli_args(cls, subparsers: argparse._SubParsersAction):
+        """
+        Add additional CLI arguments for the subclass. You do not need to add a SDRF-file parameter, as this is already done in the main CLI.
+        Example for an implemented subclass:
+        ```python
+        def add_cli_args(subparsers: argparse._SubParsersAction):
+            # Create a parser for the subclass
+            tool_parser = subparsers.add_parser("<TOOLNAME>", help="SDRF to config converter for <TOOLNAME>")
+            # Adding parameters for the specific tool
+            tool_parser.add_argument("positional-arg1", type=str, help="Positional arument 1")
+            tool_parser.add_argument("--additional-arg1", "-a", required=True, type=int, default=1, help="An additional argument")
+            # Add the convert_via_cli method as callback
+            tool_parser.set_defaults(func=cls.convert_via_cli)
+        ```
+        `convert_via_cli` will automatically be called with the parsed arguments.
+        Example for calling the CLI: `python -m sdrf_convert <TOOLNAME> <positional-arg1> --additional-arg1 2`
+
+        Parameters
+        ----------
+        subparsers : argparse._SubParsersAction
+            Subparsers for the subclass
+        """
+        raise NotImplementedError("Method add_cli_args() not implemented for AbstractConverter")
