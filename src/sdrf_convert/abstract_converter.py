@@ -214,7 +214,7 @@ class AbstractConverter:
             The converted SDRF file
         """
         self.init_converter(sdrf)
-        raise NotImplementedError("Method convert() not implemented for AbstractConverter")
+        raise NotImplementedError(f"Method convert() not implemented for {cls.__name__}")
     
     @classmethod
     def convert_via_cli(cli_args: argparse.Namespace):
@@ -259,4 +259,4 @@ class AbstractConverter:
         subparsers : argparse._SubParsersAction
             Subparsers for the subclass
         """
-        raise NotImplementedError("Method add_cli_args() not implemented for AbstractConverter")
+        raise NotImplementedError(f"Method add_cli_args() not implemented for {cls.__name__}")
