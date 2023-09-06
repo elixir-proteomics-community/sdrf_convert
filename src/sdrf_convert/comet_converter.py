@@ -3,6 +3,7 @@ Module for converting SDRF files to Comet params files and CLI calls
 """
 
 # std imports
+import argparse
 from copy import deepcopy
 from io import IOBase
 from pathlib import Path
@@ -250,3 +251,22 @@ class CometConverter(AbstractConverter):
                     grouped_df.loc[row_idx, "comment[data file]"]
                 )
             yield cli_str, params
+
+    @classmethod
+    def convert_via_cli(cli_args: argparse.Namespace):
+        # Read the comet params
+        comet_params: str = Path(cli_args.comet_params).read_text()
+        converter = CometConverter(
+            comet_params,
+            cli_args.group_similar_searches
+        )
+        converter.convert(cli_args.sdrf_file)
+    
+    @classmethod
+    def add_cli_args(cls, subparsers: argparse._SubParsersAction):
+        tool_parser = subparsers.add_parser("comet", help="SDRF to config converter for Comet")
+        tool_parser.add_argument("comet_params", help="Comet params file")
+        tool_parser.add_argument(
+            "-g", "--group-similar-searches", default=False, action="store_true", help="Group samples with equal search parameters in one config file and CLI command"
+        )
+        tool_parser.set_defaults(func=cls.convert_via_cli)
