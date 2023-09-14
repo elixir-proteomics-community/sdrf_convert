@@ -244,7 +244,7 @@ class AbstractConverter:
         raise NotImplementedError(f"Method convert() not implemented for {cls.__name__}")
     
     @classmethod
-    def convert_via_cli(cli_args: argparse.Namespace):
+    def convert_via_cli(cls, cli_args: argparse.Namespace):
         """Uses the CLI arguments convert a SDRF file to the tool config.
         Example for an implemented subclass:
         ```python
