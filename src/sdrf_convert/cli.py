@@ -21,8 +21,15 @@ class CommandLineInterface:
     def __init__(self):
         self.__parser = argparse.ArgumentParser(description='Convert an SDRF to your favorite tool\'s config')
         self.__parser.add_argument('sdrf_file', help='Path to the SDRF file')
-        self.__parser.set_defaults(func=lambda: self.__parser.print_help())
+        #self.__parser.set_defaults(func=lambda: self.__parser.print_help())
         subparsers = self.__parser.add_subparsers()
+
+        parser_bla = subparsers.add_parser("bla", help="bla blubber")
+        parser_bla.add_argument('barri', type=str, help='barri help')
+        parser_bla.add_argument('--bar', type=int, help='bar help')
+
+        parser_bla.set_defaults(func=self.__brbl)
+
         # Iterate over all subclasses of AbstractConverter and add their CLI arguments
         for converter in AbstractConverter.__subclasses__():
             converter.add_cli_args(subparsers)
@@ -33,3 +40,7 @@ class CommandLineInterface:
         """
         args = self.__parser.parse_args()
         args.func(args)
+    
+    def __brbl(self, args):
+        print("HALLLLOOO brbl")
+        print(args)

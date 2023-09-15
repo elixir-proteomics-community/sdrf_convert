@@ -143,7 +143,7 @@ class AbstractConverter:
             elem = elem.strip()
             if elem == "":
                 continue
-            elem_split = elem.split("=")
+            elem_split = elem.split("=", maxsplit=1)
             if len(elem_split) != 2:
                 raise ValueError(f"Invalid ontology string: {ontology_str}")
             ontology_dict[elem_split[0].strip()] = elem_split[1].strip()
@@ -296,7 +296,7 @@ class AbstractConverter:
             The converted SDRF file
         """
         self.init_converter(sdrf)
-        raise NotImplementedError(f"Method convert() not implemented for {cls.__name__}")
+        raise NotImplementedError(f"Method convert() not implemented for {self.__name__}")
     
     @classmethod
     def convert_via_cli(cli_args: argparse.Namespace):
