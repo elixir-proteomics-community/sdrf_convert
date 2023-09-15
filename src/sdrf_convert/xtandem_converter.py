@@ -12,7 +12,6 @@ import xml.etree.ElementTree as ET
 
 # 3rd party imports
 import pandas as pd
-from pyteomics import mass
 
 # internal imports
 from sdrf_convert.abstract_converter import AbstractConverter
