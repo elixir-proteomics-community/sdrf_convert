@@ -2,6 +2,8 @@ name: sdrf_convert
 channels:
   # list used channels to make sure it works with micromamba
   - defaults
+  - bioconda
+  - conda-forge
 dependencies:
   - python=3.11
   - setuptools
