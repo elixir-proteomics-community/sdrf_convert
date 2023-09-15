@@ -26,6 +26,8 @@ class FlashLFQConverter(AbstractConverter):
         """
         Creates a new instance of the FlashLFQConverter class
         """
+        # pylint: disable=useless-parent-delegation
+        # Subclassing is needed for automatic CLI generation
         super().__init__()
 
     def convert(self, sdrf: Union[pd.DataFrame, IOBase, Path]) -> Iterator[float]:
