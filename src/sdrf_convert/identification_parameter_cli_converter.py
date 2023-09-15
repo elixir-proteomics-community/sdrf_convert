@@ -7,7 +7,7 @@ import argparse
 from io import IOBase
 from pathlib import Path
 import re
-from typing import Any, ClassVar, Dict, Iterator, List, Type, Union, Tuple
+from typing import Any, ClassVar, Dict, Iterator, List, Type, Union, Tuple, Set
 import warnings
 
 # 3rd party imports
@@ -24,6 +24,7 @@ class IdentificationParameterCliConverter(AbstractConverter):
     COLUMN_PROPERTIES: ClassVar[Dict[str, List[Type]]] = {
         "comment[precursor mass tolerance]": [pd.StringDtype()],
         "comment[fragment mass tolerance]": [pd.StringDtype()],
+        "comment[modification parameters]": [pd.StringDtype()],
     }
 
     AMINO_ACID_PATTERN: ClassVar[re.Pattern] = re.compile(r"[A-Z]")
@@ -95,6 +96,20 @@ class IdentificationParameterCliConverter(AbstractConverter):
                         is_fixed,
                         f"{mod.code_name} of {amino_acid_match.group().upper()}"
                     )
+    
+    def get_cleavage_enzymes(self) -> Set[str]:
+        """
+        Returns the cleavage enzymes from the SDRF file
+
+        Yields
+        ------
+        Iterator[str]
+            Iterator over the cleavage enzymes
+        """
+        return {
+            self.__class__.ontology_str_to_dict(ontology_str)['NT']
+            for ontology_str in self.sdrf_df["comment[cleavage agent details]"]
+        }
 
     def convert(self, sdrf: Union[pd.DataFrame, IOBase, Path]) -> Iterator[str]:
         """
@@ -150,6 +165,10 @@ class IdentificationParameterCliConverter(AbstractConverter):
                 variabel_mods.add(mod)
 
         tool_params += f"-fixed_mods \"{','.join(fixed_mods)}\" -variable_mods \"{','.join(variabel_mods)}\" "
+
+        cleavage_enzymes = self.get_cleavage_enzymes()
+
+        tool_params += f"-enzyme \"{','.join(cleavage_enzymes)}\" "
 
         yield tool_params
 
