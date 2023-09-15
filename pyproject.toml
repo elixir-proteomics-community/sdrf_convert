@@ -9,7 +9,8 @@ requires-python = ">=3.11"
 dependencies = [
     "pandas >= 2, < 2.1.0",
     "pyteomics >= 4.6, < 5",
-    "lxml >= 4.9.3, < 5"
+    "lxml >= 4.9.3, < 5",
+    "sqlalchemy >= 2, < 3",
 ]
 
 
