@@ -5,11 +5,9 @@ Module for converting SDRF files to XTandem param files and CLI calls
 
 # std imports
 import argparse
-from copy import deepcopy
 from io import IOBase
 from pathlib import Path
-import re
-from typing import ClassVar, Dict, Iterator, List, Set, Tuple, Type, Union
+from typing import ClassVar, Dict, Iterator, List, Tuple, Type, Union
 import xml.etree.ElementTree as ET
 
 # 3rd party imports
