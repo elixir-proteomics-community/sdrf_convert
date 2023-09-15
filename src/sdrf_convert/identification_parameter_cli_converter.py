@@ -31,6 +31,10 @@ class IdentificationParameterCliConverter(AbstractConverter):
     """Pattern to find amino acids in TA attribute of modification
     """
 
+    NAME_MAP: ClassVar[Dict[str, str]] = {
+        "Carbamidomethyl": "Carbamidomethylation"
+    }
+
     def __init__(self):
         """
         Creates a new instance of the FlashLFQConverter class
@@ -91,10 +95,11 @@ class IdentificationParameterCliConverter(AbstractConverter):
 
                 is_fixed: bool = modification_dict['MT'].lower() == "fixed"
 
+                mod_name: str = self.__class__.NAME_MAP.get(modification_dict['NT'], modification_dict['NT'])
                 for amino_acid_match in self.AMINO_ACID_PATTERN.finditer(modification_dict['TA']):
                     yield (
                         is_fixed,
-                        f"{mod.code_name} of {amino_acid_match.group().upper()}"
+                        f"{mod_name} of {amino_acid_match.group().upper()}"
                     )
     
     def get_cleavage_enzymes(self) -> Set[str]:
