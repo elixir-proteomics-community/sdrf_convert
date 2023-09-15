@@ -138,7 +138,7 @@ class AbstractConverter:
             elem = elem.strip()
             if elem == "":
                 continue
-            elem_split = elem.split("=")
+            elem_split = elem.split("=", maxsplit=1)
             if len(elem_split) != 2:
                 raise ValueError(f"Invalid ontology string: {ontology_str}")
             ontology_dict[elem_split[0].strip()] = elem_split[1].strip()
