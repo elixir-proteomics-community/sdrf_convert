@@ -6,7 +6,7 @@ SDRF -> sdrf_convert -> CLI||config
 
 ## Usage
 ```
-python -m sdrf_convert <tool> -i some.sdrf <additional_params_depends_on_tool>
+python -m sdrf_convert some.sdrf <tool> <additional_params_depending_on_tool>
 ```
 
 
