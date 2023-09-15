@@ -253,7 +253,7 @@ class CometConverter(AbstractConverter):
             yield cli_str, params
 
     @classmethod
-    def convert_via_cli(cli_args: argparse.Namespace):
+    def convert_via_cli(cls, cli_args: argparse.Namespace):
         # Read the comet params
         comet_params: str = Path(cli_args.comet_params).read_text()
         converter = CometConverter(
