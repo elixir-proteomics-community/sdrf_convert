@@ -23,6 +23,7 @@ class CommandLineInterface:
         self.__parser.add_argument('sdrf_file', help='Path to the SDRF file')
         self.__parser.set_defaults(func=lambda: self.__parser.print_help())
         subparsers = self.__parser.add_subparsers()
+
         # Iterate over all subclasses of AbstractConverter and add their CLI arguments
         for converter in AbstractConverter.__subclasses__():
             converter.add_cli_args(subparsers)

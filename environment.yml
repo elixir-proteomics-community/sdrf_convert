@@ -8,5 +8,6 @@ dependencies:
   - python=3.11
   - setuptools
   - pip
+  - xtandem
   - pip:
     - -e .[dev]
