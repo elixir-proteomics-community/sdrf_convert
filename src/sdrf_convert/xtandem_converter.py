@@ -151,7 +151,7 @@ class XTandemConverter(AbstractConverter):
         ET.SubElement(xml_params, "note", type="input", label="spectrum, path").text = str(file_path.absolute())
 
         # set the output path
-        output_path_init : Path = Path(self.output_path + sample['comment[data file]'] + ".xml")
+        output_path_init : Path = Path(self.output_path + sample['comment[data file]'] + ".t.xml")
         ET.SubElement(xml_params, "note", type="input", label="output, path").text = str(output_path_init)
         ET.SubElement(xml_params, "note", type="input", label="output, path hashing").text = "no"
 
