@@ -81,7 +81,7 @@ class AbstractConverter:
                 if not sdrf_df[col_name].dtype in col_types:
                     raise TypeError((
                         f"Column `{col_name}` has wrong type. "
-                        f"Expected on of {col_types} but got `{sdrf_df[col_name].dtype}`"
+                        f"Expected one of {col_types} but got `{sdrf_df[col_name].dtype}`"
                     ))
 
     @classmethod
@@ -151,7 +151,8 @@ class AbstractConverter:
     def get_column_types(cls, sdrf: StringIO) -> Dict[str, List[Type]]:
         """
         Reads the header and assigns the correct dtypes to the columns even if the column name
-        is used multiple times (which ends up with a suffix (.1, .2, ...) in the dataframe column name).
+        is used multiple times (which ends up with a suffix (.1, .2, ...) in the 
+        dataframe column name).
 
         Parameters
         ----------
