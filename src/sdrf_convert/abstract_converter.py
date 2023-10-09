@@ -333,7 +333,7 @@ class AbstractConverter:
         """
         self.init_converter(sdrf)
         raise NotImplementedError(f"Method convert() not implemented for {self.__class__.__name__}")
-    
+   
     @classmethod
     def convert_via_cli(cls, cli_args: argparse.Namespace):
         """Uses the CLI arguments convert a SDRF file to the tool config.
