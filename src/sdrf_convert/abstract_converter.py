@@ -203,7 +203,7 @@ class AbstractConverter:
         Dict[str, List[Type]]
             Column names (key) and dtypes (value)
         """
-        column_ctr = defaultdict(int)
+        column_ctr: Dict[str, int] = defaultdict(int)
 
         for line in sdrf:
             line = line.strip()
