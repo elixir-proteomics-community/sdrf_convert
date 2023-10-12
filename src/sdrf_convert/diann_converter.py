@@ -1,5 +1,5 @@
 """
-Module for converting SDRF files to DIA-NN CLI call
+Module for converting SDRF files to DIA-NN CLI call and config file (for GUI version DIA-NN)
 """
 import os
 from typing import ClassVar, Dict, List, Type, Union, Any
@@ -10,16 +10,17 @@ from pathlib import Path
 import pandas as pd
 from abstract_converter import AbstractConverter
 
+
 class DiannConverter(AbstractConverter):
     """
     SDRF converter for DIA-NN search engine
     """
+
     def __init__(self, diann_path: Path, diann_params: str, raw_files_path: Path) -> None:
         super().__init__()
         self.diann_path = diann_path
         self.diann_params = diann_params
         self.raw_files_path = raw_files_path
-        
 
     COLUMN_PROPERTIES: ClassVar[Dict[str, List[Type]]] = {
         "comment[modification parameters]": [pd.StringDtype()],
@@ -28,7 +29,6 @@ class DiannConverter(AbstractConverter):
         "comment[data file]": [pd.StringDtype()],
         "comment[cleavage agent details]": [pd.StringDtype()]
     }
-
 
     OPTIONAL_COLUMN_PROPERTIES: ClassVar[Dict[str, List[Type]]] = {
         "comment[number of missed cleavages]": [pd.Int64Dtype()]
@@ -74,7 +74,7 @@ class DiannConverter(AbstractConverter):
             strinf = strinf + ' --f ' + self.raw_files_path + '/' + name
 
         return strinf
-    
+
     def parse_diann_params(self, sdrf: pd.DataFrame, opt_columns: set) -> str:
         """
         Takes values from OPTIONAL and REQUIRED columns
@@ -88,31 +88,36 @@ class DiannConverter(AbstractConverter):
             taken from SDRF REQUIRED and OPTIONAL columns
             e.g. "--var-mod UniMod:1,42.010565,*n --cut K*,R*,!*P --mass-acc-ms1 0"
         """
-        # parse precursor and fragment mass tolerance
+        # parse precursor and fragment mass tolerance (ppm)
         prec_mass_tol = sdrf['comment[precursor mass tolerance]'].values[0]
         frag_mass_tol = sdrf['comment[fragment mass tolerance]'].values[0]
         mass_tol_str = self.SDRF_COL_NAME_DIANN_PARAM_MAP['comment[precursor mass tolerance]'][0] + ' ' + str(prec_mass_tol) + ' ' +\
-                            self.SDRF_COL_NAME_DIANN_PARAM_MAP['comment[fragment mass tolerance]'][0] + ' ' + str(frag_mass_tol) + ' '
-        
+            self.SDRF_COL_NAME_DIANN_PARAM_MAP['comment[fragment mass tolerance]'][0] + ' ' + str(
+                frag_mass_tol) + ' '
+
         # parse modifications
         mod_str = ''
 
         # parse proteases
-        clvg_ag_str = ''
+        protease_details_dict = self.ontology_str_to_dict(
+            sdrf['comment[cleavage agent details]'].values[0])
+        protease_name = protease_details_dict['NT']
+        cleavage_site_regex = self.CLEAVAGE_SITES_MAP[protease_name]
+        clvg_ag_str = self.SDRF_COL_NAME_DIANN_PARAM_MAP[
+            'comment[cleavage agent details]'][0] + ' ' + cleavage_site_regex + ' '
 
         # parse missed cleavage
-        if len(opt_columns) > 0: 
+        if len(opt_columns) > 0:
             missed_cleavages = sdrf['comment[number of missed cleavages]'].values[0]
-            missed_cleavages_str = self.SDRF_COL_NAME_DIANN_PARAM_MAP['comment[number of missed cleavages]'][0] + ' ' + str(missed_cleavages)
+            missed_cleavages_str = self.SDRF_COL_NAME_DIANN_PARAM_MAP[
+                'comment[number of missed cleavages]'][0] + ' ' + str(missed_cleavages)
 
         else:
             missed_cleavages_str = ''
-        
+
         return mass_tol_str + mod_str + clvg_ag_str + missed_cleavages_str
 
-
-
-    def convert(self, sdrf: Union[pd.DataFrame, IOBase, Path]) -> Any:
+    def convert(self, sdrf: Union[pd.DataFrame, IOBase, Path]) -> tuple:
         """
         Convert the SDRF file to the desired format.
         The output depends on the targeted software, it may be a config file only, 
@@ -120,13 +125,14 @@ class DiannConverter(AbstractConverter):
 
         Returns
         -------
-        Any
-            The converted SDRF file
+        tuple
+            CLI command (for terminal execution of DIA-NN) and config file (any extension, e.g .cfg)
+            containing command line paramenters that can be passed in GUI version
+            of DIA-NN via --cfg parameter in Additional options window.
         """
         self.init_converter(sdrf)
         return str(self.diann_path) + ' ' \
             + self.parse_file_names(self.sdrf_df) + ' '\
-                  + self.diann_params + ' ' +\
-                        self.parse_diann_params(self.sdrf_df, self.present_optional_columns)
-                       #self.sdrf_df['comment[cleavage agent details]'].values[0] +\
-                            #self.CLEAVAGE_SITES_MAP[self.ontology_str_to_dict(self.sdrf_df['comment[cleavage agent details]'].values[0])['NT']]
+            + self.diann_params + ' ' +\
+            self.parse_diann_params(self.sdrf_df, self.present_optional_columns)
+    
