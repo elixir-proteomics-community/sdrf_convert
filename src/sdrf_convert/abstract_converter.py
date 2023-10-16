@@ -3,6 +3,7 @@ Abstract class for SDRF file converters.
 """
 
 # std imports
+import argparse
 from collections import defaultdict
 from io import IOBase, StringIO, BytesIO
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Any, ClassVar, Dict, List, Set, Type, Union
 
 # 3rd party imports
 import pandas as pd
+from pyteomics import mass
 
 SDRF_CELL_SEPARATOR: str = "\t"
 """Separator used in SDRF file
@@ -40,6 +42,7 @@ class AbstractConverter:
 
         self.sdrf_df: pd.DataFrame = pd.DataFrame()
         self.present_optional_columns: Set[str] = set()
+        self.unimod_db: mass.Unimod = None
 
     @classmethod
     def find_columns(cls, sdrf_df: pd.DataFrame, col_name: str) -> List[str]:
@@ -81,7 +84,7 @@ class AbstractConverter:
                 if not sdrf_df[col_name].dtype in col_types:
                     raise TypeError((
                         f"Column `{col_name}` has wrong type. "
-                        f"Expected on of {col_types} but got `{sdrf_df[col_name].dtype}`"
+                        f"Expected one of {col_types} but got `{sdrf_df[col_name].dtype}`"
                     ))
 
     @classmethod
@@ -140,12 +143,48 @@ class AbstractConverter:
             elem = elem.strip()
             if elem == "":
                 continue
-            elem_split = elem.split("=")
+            elem_split = elem.split("=", maxsplit=1)
             if len(elem_split) != 2:
                 raise ValueError(f"Invalid ontology string: {ontology_str}")
             ontology_dict[elem_split[0].strip()] = elem_split[1].strip()
 
         return ontology_dict
+
+    @classmethod
+    def get_column_types(cls, sdrf: StringIO) -> Dict[str, List[Type]]:
+        """
+        Reads the header and assigns the correct dtypes to the columns even if the column name
+        is used multiple times (which ends up with a suffix (.1, .2, ...) in the dataframe column name).
+
+        Parameters
+        ----------
+        sdrf : StringIO
+            SDRF file as StringIO object
+
+        Returns
+        -------
+        Dict[str, List[Type]]
+            Column names (key) and dtypes (value)
+        """
+        column_ctr = defaultdict(int)
+
+        for line in sdrf:
+            line = line.strip()
+            if line == "":
+                continue
+            columns = line.split(SDRF_CELL_SEPARATOR)
+            for column in columns:
+                column = column.strip()
+                column_ctr[column] += 1
+            break
+
+        column_types: Dict[str, List[Type]] = {}
+        for column, ctr in column_ctr.items():
+            column_types[column] = cls.COLUMN_PROPERTIES[column][0]
+            if ctr > 1:
+                for i in range(ctr):
+                    column_types[f"{column}.{i+1}"] = cls.COLUMN_PROPERTIES[column][0]
+        return column_types
 
     @classmethod
     def get_column_types(cls, sdrf: StringIO) -> Dict[str, List[Type]]:
@@ -164,7 +203,7 @@ class AbstractConverter:
         Dict[str, List[Type]]
             Column names (key) and dtypes (value)
         """
-        column_ctr = defaultdict(int)
+        column_ctr: Dict[str, int] = defaultdict(int)
 
         for line in sdrf:
             line = line.strip()
@@ -233,6 +272,31 @@ class AbstractConverter:
             dtype=column_types
         )
 
+    def get_unimod_from_NT(self, nt_entry: str) -> Dict[str, Any]:
+        """
+        Uses the given nt_entry for a query to Unimod (by pyteomics) and
+        returns the resulting entry, or an empty record, if no corresponding
+        entry was found in Unimod
+
+        Parameters
+        ----------
+        nt_entry : str
+            The title of the modification, like Oxidation (given by NT in the SDRF columns)
+
+        Returns
+        -------
+        Dict[str, Any]:
+            an Unimod entry
+        """
+        if self.unimod_db == None:
+            self.unimod_db = mass.Unimod()
+
+        mod = self.unimod_db.by_title(nt_entry)
+        if (len(mod) == 0):
+            mod = self.unimod_db.by_name(nt_entry)
+
+        return mod
+
     def init_converter(self, sdrf: Union[pd.DataFrame, IOBase, Path]):
         """
         1. Reads the SDRF and sets it to self.sdrf_df
@@ -269,4 +333,51 @@ class AbstractConverter:
         """
         self.init_converter(sdrf)
         raise NotImplementedError(
-            "Method convert() not implemented for AbstractConverter")
+            f"Method convert() not implemented for {self.__class__.__name__}")
+
+    @classmethod
+    def convert_via_cli(cls, cli_args: argparse.Namespace):
+        """Uses the CLI arguments convert a SDRF file to the tool config.
+        Example for an implemented subclass:
+        ```python
+
+        def convert_via_cli(cli_args: argparse.Namespace):
+            sdrf_path = Path(cli_args.sdrf)
+            positional_arg1 = cli_args.positional_arg1
+            converter = ToolConverter(positional_arg1)
+            converter.convert(sdrf_path)
+        ```
+
+        Parameters
+        ----------
+        cli_args : argparse.Namespace
+            Collected CLI arguments
+        """
+        raise NotImplementedError(
+            "Method convert_via_cli() not implemented for AbstractConverter")
+
+    @classmethod
+    def add_cli_args(cls, subparsers: argparse._SubParsersAction):
+        """
+        Add additional CLI arguments for the subclass. You do not need to add a SDRF-file parameter, as this is already done in the main CLI.
+        Example for an implemented subclass:
+        ```python
+        def add_cli_args(subparsers: argparse._SubParsersAction):
+            # Create a parser for the subclass
+            tool_parser = subparsers.add_parser("<TOOLNAME>", help="SDRF to config converter for <TOOLNAME>")
+            # Adding parameters for the specific tool
+            tool_parser.add_argument("positional-arg1", type=str, help="Positional arument 1")
+            tool_parser.add_argument("--additional-arg1", "-a", required=True, type=int, default=1, help="An additional argument")
+            # Add the convert_via_cli method as callback
+            tool_parser.set_defaults(func=cls.convert_via_cli)
+        ```
+        `convert_via_cli` will automatically be called with the parsed arguments.
+        Example for calling the CLI: `python -m sdrf_convert <TOOLNAME> <positional-arg1> --additional-arg1 2`
+
+        Parameters
+        ----------
+        subparsers : argparse._SubParsersAction
+            Subparsers for the subclass
+        """
+        raise NotImplementedError(
+            f"Method add_cli_args() not implemented for {cls.__name__}")

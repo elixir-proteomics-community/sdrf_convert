@@ -1,7 +1,6 @@
 """
 Module for converting SDRF files to DIA-NN CLI call and config file (for GUI version DIA-NN)
 """
-import os
 from typing import ClassVar, Dict, List, Type, Union, Any
 from io import IOBase
 from pathlib import Path
@@ -34,13 +33,12 @@ class DiannConverter(AbstractConverter):
         "comment[number of missed cleavages]": [pd.Int64Dtype()]
     }
 
-    SDRF_COL_NAME_DIANN_PARAM_MAP: ClassVar[Dict[str, List[str]]] = {
-        "comment[number of missed cleavages]": ["--missed-cleavages"],
-        "comment[modification parameters]": ["--fixed-mod", "--var-mod"],
-        "comment[precursor mass tolerance]": ["--mass-acc-ms1"],
-        "comment[fragment mass tolerance]": ["--mass-acc"],
-        "comment[data file]": ["--f"],
-        "comment[cleavage agent details]": ["--cut"]
+    SDRF_COL_NAME_DIANN_PARAM_MAP: ClassVar[Dict[str, Any]] = {
+        "comment[number of missed cleavages]": "--missed-cleavages",
+        "comment[precursor mass tolerance]": "--mass-acc-ms1",
+        "comment[fragment mass tolerance]": "--mass-acc",
+        "comment[data file]": "--f",
+        "comment[cleavage agent details]": "--cut"
 
     }
 
@@ -91,12 +89,28 @@ class DiannConverter(AbstractConverter):
         # parse precursor and fragment mass tolerance (ppm)
         prec_mass_tol = sdrf['comment[precursor mass tolerance]'].values[0]
         frag_mass_tol = sdrf['comment[fragment mass tolerance]'].values[0]
-        mass_tol_str = self.SDRF_COL_NAME_DIANN_PARAM_MAP['comment[precursor mass tolerance]'][0] + ' ' + str(prec_mass_tol) + ' ' +\
-            self.SDRF_COL_NAME_DIANN_PARAM_MAP['comment[fragment mass tolerance]'][0] + ' ' + str(
-                frag_mass_tol) + ' '
+        mass_tol_str = self.SDRF_COL_NAME_DIANN_PARAM_MAP['comment[precursor mass tolerance]'] + \
+            ' ' + str(prec_mass_tol) + ' ' + self.SDRF_COL_NAME_DIANN_PARAM_MAP[
+                'comment[fragment mass tolerance]'] + ' ' + str(frag_mass_tol) + ' '
 
         # parse modifications
+        # parser will check hom many columns with modification details are in SDRF and if it is > 1
+        # pars ethem separately
         mod_str = ''
+        for col_name in sdrf.columns:
+            if 'comment[modification parameters]' in col_name:
+                mod_details_dict = self.ontology_str_to_dict(sdrf[col_name].values[0])
+                n_t = mod_details_dict['NT']
+                t_a = mod_details_dict['TA']
+                m_t = mod_details_dict['MT']
+                unimod_id = self.get_unimod_from_NT(n_t)
+                if m_t == 'Fixed':
+                    cur_mod_str = '--fixed-mod' + ' ' + 'UniMod:' + str(unimod_id['record_id']) + \
+                        ',' + str(unimod_id['mono_mass']) + ',' + t_a + ' '
+                elif m_t == 'Variable':
+                    cur_mod_str = '--var-mod' + ' ' + 'UniMod:' + str(unimod_id['record_id']) + \
+                        ',' + str(unimod_id['mono_mass']) + ',' + t_a + ' '
+                mod_str = mod_str + cur_mod_str
 
         # parse proteases
         protease_details_dict = self.ontology_str_to_dict(
@@ -104,13 +118,13 @@ class DiannConverter(AbstractConverter):
         protease_name = protease_details_dict['NT']
         cleavage_site_regex = self.CLEAVAGE_SITES_MAP[protease_name]
         clvg_ag_str = self.SDRF_COL_NAME_DIANN_PARAM_MAP[
-            'comment[cleavage agent details]'][0] + ' ' + cleavage_site_regex + ' '
+            'comment[cleavage agent details]'] + ' ' + cleavage_site_regex + ' '
 
         # parse missed cleavage
         if len(opt_columns) > 0:
             missed_cleavages = sdrf['comment[number of missed cleavages]'].values[0]
             missed_cleavages_str = self.SDRF_COL_NAME_DIANN_PARAM_MAP[
-                'comment[number of missed cleavages]'][0] + ' ' + str(missed_cleavages)
+                'comment[number of missed cleavages]'] + ' ' + str(missed_cleavages)
 
         else:
             missed_cleavages_str = ''
@@ -131,8 +145,13 @@ class DiannConverter(AbstractConverter):
             of DIA-NN via --cfg parameter in Additional options window.
         """
         self.init_converter(sdrf)
-        return str(self.diann_path) + ' ' \
+        cli = str(self.diann_path) + ' ' \
             + self.parse_file_names(self.sdrf_df) + ' '\
             + self.diann_params + ' ' +\
             self.parse_diann_params(self.sdrf_df, self.present_optional_columns)
+
+        with open(self.raw_files_path + '/config_diann.cfg', 'wt', encoding='UTF-8') as cfg:
+            cfg.write(cli)
+
+        return cli
     
