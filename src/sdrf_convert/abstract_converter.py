@@ -266,11 +266,20 @@ class AbstractConverter:
         else:
             column_types = cls.get_column_types(sdrf)
 
-        return pd.read_csv(
+        sdrf_df = pd.read_csv(
             sdrf,
             sep=SDRF_CELL_SEPARATOR,
             dtype=column_types
         )
+        # As pandas throws an error when column / type combination is given for a non existing column
+        # when reading a CSV, we go over the present optional columns and manually set there type
+        for col_name, col_types in cls.OPTIONAL_COLUMN_PROPERTIES.items():
+            present_col_names: List[str] = cls.find_columns(sdrf_df, col_name)
+            for col in present_col_names:
+                if sdrf_df[col].dtype not in col_types:
+                    sdrf_df[col] = sdrf_df[col].astype(col_types[0])
+
+        return sdrf_df
     
     def get_unimod_from_NT(self, nt_entry: str) -> Dict[str, Any]:
         """
