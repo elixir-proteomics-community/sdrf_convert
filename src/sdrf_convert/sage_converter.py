@@ -1,4 +1,5 @@
 """
+
 Module for converting SDRF files to Sage config file
 """
 
@@ -40,7 +41,8 @@ class SageConverter(AbstractConverter):
 
 
     '''vvv  Config Datei wie Sie als beispiel Datei auf in der SAGE Dokumentation angegeben ist.  vvv'''
-    SAGE_ORIGINAL_CONFIG = {
+   
+    ''' SAGE_ORIGINAL_CONFIG = {
         "database": {
             "bucket_size": 8192,
             "enzyme": {
@@ -82,7 +84,7 @@ class SageConverter(AbstractConverter):
         "predict_rt": True,
         "output_directory": "s3://bucket/prefix",
         "mzml_paths": []
-    }
+    }'''
 
     def __init__(self,
                  raw_files_path: str = "./",
@@ -90,7 +92,8 @@ class SageConverter(AbstractConverter):
                  output_path: str = "./Sage_identification",
                  allowed_miscleavages: int = 2, 
                  max_parent_charge: int = 4,
-                 group_similar_searches: bool = True):
+                 group_similar_searches: bool = True,
+                 sage_params: str = "/path/to/config"):
         """Creates a new instance of the Sage_Converter Class
         
         Parameters
@@ -111,6 +114,7 @@ class SageConverter(AbstractConverter):
         self.allowed_miscleavages : int = allowed_miscleavages
         self.max_parent_charge :int = max_parent_charge
         self.group_similar_searches: bool = group_similar_searches
+        self.sage_params: str = sage_params
 
     def convert_row(self, row_idx, mzML_rows):
         """
@@ -125,20 +129,38 @@ class SageConverter(AbstractConverter):
         """
         sample: pd.DataFrame = self.sdrf_df.iloc[row_idx]
 
-        """copying the dictonary to preserve the original"""         
-        SAGE_CONFIG = copy.deepcopy(self.SAGE_ORIGINAL_CONFIG)
+        """copying the dictonary to preserve the original"""
+        SAGE_ORIGINAL_CONFIG = json.load(open(Path(self.sage_params)))         
+        SAGE_CONFIG = copy.deepcopy(SAGE_ORIGINAL_CONFIG)
         
        
         # Set several search Parameters not given by the sdrf
-        SAGE_CONFIG["output_directory"] = self.output_path
-        SAGE_CONFIG["database"]["fasta"] = self.fasta_file
+        try:
+            output_path:Path = Path(self.output_path)
+            output_path_str:str = str(output_path.absolute())
+            SAGE_CONFIG["output_directory"] = output_path_str
+        except:
+            raise TypeError("Output Path doesnt exist")
+
+        try:
+            fasta_path:Path = Path(self.fasta_file)
+            fasta_path_str = str(fasta_path.absolute())
+            SAGE_CONFIG["database"]["fasta"] = fasta_path_str
+        except:
+            raise TypeError("path to fasta doesnt exist")
+
         SAGE_CONFIG["database"]["enzyme"]["missed_cleavages"] = self.allowed_miscleavages
         SAGE_CONFIG["max_fragment_charge"]= self.max_parent_charge
 
         # add all mzML Paths with the Search Parametes of row_idx
+        try:
+            raw_files_path:Path = Path(self.raw_files_path)
+            raw_files_path_str = str(raw_files_path.absolute())
+        except:
+            raise TypeError("path to MzMLs doesn't exist")
         for mzML in mzML_rows:
             related_mzML_row: pd.DataFrame = self.sdrf_df.iloc[mzML]
-            SAGE_CONFIG["mzml_paths"].append(self.raw_files_path + "/" + related_mzML_row['comment[data file]'])
+            SAGE_CONFIG["mzml_paths"].append(raw_files_path_str + "/" + related_mzML_row['comment[data file]'])
 
         # set Peptide Mass tolarance and unit
         precursor_mass_tolerance_split: str = sample['comment[precursor mass tolerance]'].split()
@@ -148,11 +170,13 @@ class SageConverter(AbstractConverter):
             raise TypeError("Peptide mass tolerance must be numeric, given was '{tol}".format(tol=precursor_mass_tolerance_split[0]))
         
         if(precursor_mass_tolerance_split[1]=='ppm'):
+            SAGE_CONFIG["precursor_tol"].clear()
             SAGE_CONFIG["precursor_tol"]["ppm"] = [-precursor_mass_tolerance, precursor_mass_tolerance]
         elif(precursor_mass_tolerance_split[1]=='Da'):
+            SAGE_CONFIG["precursor_tol"].clear()
             SAGE_CONFIG["precursor_tol"]["da"] = [-precursor_mass_tolerance, precursor_mass_tolerance]
         else:
-            raise TypeError("Peptide mass tolarance must be given in da or ppm")
+            print("used pre cursor tolarance of the original config")
 
         # set fragment mass tolerance and unit
         fragment_mass_tolerance_split: str = sample['comment[fragment mass tolerance]'].split()
@@ -162,11 +186,13 @@ class SageConverter(AbstractConverter):
             raise TypeError("Fragment mass tolerance must be numeric, given was '{tol}".format(tol=fragment_mass_tolerance_split[0]))
         
         if(fragment_mass_tolerance_split[1]=='ppm'):
+            SAGE_CONFIG["fragment_tol"].clear()
             SAGE_CONFIG["fragment_tol"]["ppm"] = [-fragment_mass_tolerance, fragment_mass_tolerance]
         elif(fragment_mass_tolerance_split[1]=='Da'):
+            SAGE_CONFIG["fragment_tol"].clear()
             SAGE_CONFIG["fragment_tol"]["da"] = [-fragment_mass_tolerance, fragment_mass_tolerance]
         else:
-            raise TypeError("Fragment mass tolarance must be given in da or ppm")
+            print("Used the Fragment tolarance of Sage Config file")
         
         # set cleavage agent details
         cleavage_agent_details_dict: dict = self.ontology_str_to_dict(
@@ -180,21 +206,7 @@ class SageConverter(AbstractConverter):
 
 
         # Set Modification Parameters if they are listet in mzML
-        for col_name in self.find_columns(self.sdrf_df, 'comment[modification parameters]*'):
-            modification_dict = self.ontology_str_to_dict(sample[col_name])
-            
-            try:
-                modification_value = float(modification_dict['MM'])
-            except:
-                raise TypeError("MM of modification must be numeric '{tol}".format(tol=fragment_mass_tolerance_split[0]))
-
-            type = "variable"
-            if modification_dict['MT'] and modification_dict['MT'].casefold() == "fixed":
-                type = "fixed"
-            if type == "variable":
-                SAGE_CONFIG['database']['variable_mods'][modification_dict['TA'][2]] = [modification_value]
-            if type == "fixed":
-                SAGE_CONFIG['database']['static_mods'][modification_dict['TA'][2]] = modification_value
+        self.__parse_modifications(sample, SAGE_CONFIG)
 
         # write and return the json
         jsonpath = Path(self.output_path + "/Config" + str(row_idx) + ".json")
@@ -220,6 +232,7 @@ class SageConverter(AbstractConverter):
 
         # init
         self.init_converter(sdrf)
+        
         
         #group the sdrf entrys by their search Parameters
         grouping: pd.core.groupby.DataFrameGroupBy = self.get_grouping()
@@ -255,6 +268,42 @@ class SageConverter(AbstractConverter):
         return self.sdrf_df.groupby(list(search_param_cols))
 
 
+    
+
+    def __parse_modifications(self, sample: pd.DataFrame, SAGE_CONFIG: dict) -> None:
+        """
+        Parses the modifications of the given sample (row) and adds the
+        information
+        """
+
+        for col_name in self.find_columns(self.sdrf_df, 'comment[modification parameters]*'):            
+            modification_dict = self.ontology_str_to_dict(sample[col_name])
+            # Mods falls die Masse direkt in der SDRF gegeben ist
+            if 'MM' in modification_dict:
+                try:
+                    modification_value:float = float(modification_dict['MM'])
+                except:
+                    raise TypeError("MM of modification must be numeric '{tol}".format(tol=fragment_mass_tolerance_split[0]))
+            elif 'NT' in modification_dict:
+                mod = self.get_unimod_from_NT(modification_dict['NT'])
+                modification_value = mod['mono_mass']
+            else:
+                modification_value = 0
+                print ("modification mass of ", sample[col_name], "could not be found")
+
+
+            type = "variable"
+            if modification_dict['MT'] and modification_dict['MT'].casefold() == "fixed":
+                type = "fixed"
+            targets_in_row = modification_dict['TA'].split(",")
+            for target in targets_in_row:
+                if len(target) != 1:
+                    target = target.strip("[']")
+                if type == "variable":
+                    SAGE_CONFIG['database']['variable_mods'][target] = [modification_value]
+                if type == "fixed":
+                    SAGE_CONFIG['database']['static_mods'][target] = modification_value
+
     @classmethod
     def convert_via_cli(cls, cli_args: argparse.Namespace):
         # Read the X!Tandem params
@@ -264,7 +313,8 @@ class SageConverter(AbstractConverter):
             output_path=cli_args.output_path,
             allowed_miscleavages=cli_args.allowed_miscleavages,
             max_parent_charge=cli_args.max_parent_charge, 
-            group_similar_searches=cli_args.group_similar_searches
+            group_similar_searches=cli_args.group_similar_searches,
+            sage_params = cli_args.sage_params
         )
         results = converter.convert(Path(cli_args.sdrf_file))
         
@@ -290,6 +340,10 @@ class SageConverter(AbstractConverter):
             "-c", "--max-parent-charge", default=4, type=int, action="store", metavar="X", help="Maximum charge state of the parent mass"
         )
         tool_parser.add_argument(
-            "-g", "--group-similar_searches", default=True, type=bool, action="store", metavar="X", help="Group equal search settings in one Config.json"
+            "-g", "--group-similar-searches", default=True, type=bool, action="store", metavar="X", help="Group equal search settings in one Config.json"
+        )
+        tool_parser.add_argument(
+            "-p", "--sage-params", default="Sage/config/original", type=str, action="store", metavar="X", help="Base/ Example Config.json that serves als a reference for default settings"
         )
         tool_parser.set_defaults(func=cls.convert_via_cli)
+        
