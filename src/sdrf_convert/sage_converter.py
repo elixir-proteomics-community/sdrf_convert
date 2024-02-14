@@ -207,10 +207,9 @@ class SageConverter(AbstractConverter):
         #create and return config.json for each grouping
         for _, rows in grouping.groups.items():
             grouped_df = self.sdrf_df.iloc[rows]
-            #self.convert_row(grouped_df.index[0], grouped_df.index)
+            self.convert_row(grouped_df.index[0], grouped_df.index)
             print ("To run Sage in Commandline use sage " + self.output_path + "/Config" + str(grouped_df.index[0]) + ".json")
-            #return Path(self.output_path+"/Config"+str(grouped_df.index[0])+".json")
-            return self.convert_row(grouped_df.index[0], grouped_df.index)
+            return Path(self.output_path+"/Config"+str(grouped_df.index[0])+".json")
             
 
 
