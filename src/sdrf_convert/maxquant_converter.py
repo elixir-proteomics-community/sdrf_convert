@@ -1,3 +1,4 @@
+
 """
 Module for converting SDRF files to MaxQuant xml param files
 """
@@ -46,17 +47,12 @@ class maxquantConverter(AbstractConverter):
                  maxquant_files_path: str = "./",
                  output_path: str = "./maxquant_identification_",
                  max_missed_cleavages: int = 2,
-                 max_threads: int = 4,
-                 group_similar_searches: bool = True):
+                 max_threads: int = 4):
         """
         Creates a new instance of the CometConverter class
 
         Parameters
         ----------
-        group_similar_searches : bool, optional
-            If True samples with equal search parameters will be grouped 
-            and only one Comet params file and CLI call per group is created.
-            If False each it will be grouped by assay name. By default False
         """
         super().__init__()
 
@@ -66,12 +62,11 @@ class maxquantConverter(AbstractConverter):
         self.output_path : str = output_path
         self.max_missed_cleavages: int = max_missed_cleavages
         self.max_threads: int = max_threads
-        self.group_similar_searches: bool = group_similar_searches
 
 
 
 
-    def convert_row(self, row_idx: int, raw_file_rows: int) -> str:
+    def convert_row(self, row_idx: int) -> str:
         """
         Creates an maxquant params file the sample at the given row of the SDRF file.
         
@@ -99,15 +94,13 @@ class maxquantConverter(AbstractConverter):
             xml_filePaths = xml_params.find('filePaths')
         except:
             raise TypeError("path to MzMLs doesn't exist")
-        for file in raw_file_rows:
-            related_row: pd.DataFrame = self.sdrf_df.iloc[file]
-            print(related_row['comment[data file]'])
-            ET.SubElement(xml_filePaths, "string").text = str(raw_files_path_str + "/" + related_row['comment[data file]'])
+        
+        ET.SubElement(xml_filePaths, "string").text = str(raw_files_path_str + "/" + self.sdrf_df.iloc[row_idx]['comment[data file]'])
 
 
         #fasta file details
         fasta_path : Path = Path(self.fasta_file)
-        xml_params.find('fastaFiles').find('FastaFileInfo').find('fastaFilePath').text = str(fasta_path)
+        xml_params.find('fastaFiles').find('FastaFileInfo').find('fastaFilePath').text = str(fasta_path.absolute())
     
         
         # set peptide mass tolerance and check unit
@@ -192,39 +185,19 @@ class maxquantConverter(AbstractConverter):
         Returns
         -------
         (str)
-            The Maxquant parameter files for each row/ each groupting
+            The Maxquant parameter files for each row
         """
+        
 
         # init
         self.init_converter(sdrf)
 
-        #group the sdrf entrys by their search Parameters
-        grouping: pd.core.groupby.DataFrameGroupBy = self.get_grouping()
         
-        #create and return config.json for each grouping
-        for _, rows in grouping.groups.items():
-            grouped_df = self.sdrf_df.iloc[rows]
-            yield grouped_df['comment[data file]'] + ".maxquant_input.xml", self.convert_row(grouped_df.index[0], grouped_df.index)
+        #create and return config.json for each row
+        for row_idx in range(0, len(self.sdrf_df)):
+            yield self.sdrf_df.iloc[row_idx]['comment[data file]'] + ".maxquant_input.xml", self.convert_row(row_idx)
 
 
-    def get_grouping(self) -> pd.core.groupby.DataFrameGroupBy:
-        """
-        Groups samples by assay nae or by similar search parameters.
-
-        Returns
-        -------
-        pd.core.groupby.DataFrameGroupBy
-            Grouped samples
-        """
-        if not self.group_similar_searches:
-            return self.sdrf_df.groupby(["assay name"])
-        # Collect columns with search params
-        search_param_cols: Set[str] = set(self.COLUMN_PROPERTIES.keys())
-        search_param_cols.update(self.present_optional_columns)
-        search_param_cols.remove("assay name")
-        search_param_cols.remove('source name')
-        search_param_cols.remove('comment[data file]')
-        return self.sdrf_df.groupby(list(search_param_cols))
 
     @classmethod
     def convert_via_cli(cls, cli_args: argparse.Namespace):
@@ -235,8 +208,7 @@ class maxquantConverter(AbstractConverter):
             maxquant_files_path=cli_args.maxquant_files_path,
             output_path=cli_args.output_path,
             max_missed_cleavages=cli_args.max_missed_cleavages,
-            max_threads=cli_args.max_threads,
-            group_similar_searches=cli_args.group_similar_searches
+            max_threads=cli_args.max_threads
         )
 
 
@@ -244,7 +216,7 @@ class maxquantConverter(AbstractConverter):
         i = 0
         
         for params in results:
-            file_path : Path = Path(converter.output_path + "/" + params[0][0])
+            file_path : Path = Path(converter.output_path + "/" + params[0])
             with open(file_path, mode='wt') as file:
                 file.write(params[1])
                 if (i > 0):
@@ -274,8 +246,5 @@ class maxquantConverter(AbstractConverter):
         )
         tool_parser.add_argument(
             "-t", "--max-threads", default=4, type=int, action="store", metavar="X", help="Maximum number of used threads for teh identification"
-        )
-        tool_parser.add_argument(
-            "-g", "--group-similar-searches", default=True, type=bool, action="store", metavar="X", help="Group equal search settings in one Config.json"
         )
         tool_parser.set_defaults(func=cls.convert_via_cli)
