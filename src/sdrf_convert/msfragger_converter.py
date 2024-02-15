@@ -168,6 +168,7 @@ class msfraggerConverter(AbstractConverter):
         i = 0
         for col_name in self.find_columns(self.sdrf_df, 'comment[modification parameters]*'):            
             modification_dict = self.ontology_str_to_dict(sample[col_name])
+            i = i + 1
             # Mods falls die Masse direkt in der SDRF gegeben ist
             type = "variable"
             if modification_dict['MT'] and modification_dict['MT'].casefold() == "fixed":
