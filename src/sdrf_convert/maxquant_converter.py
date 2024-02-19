@@ -66,7 +66,7 @@ class maxquantConverter(AbstractConverter):
 
 
 
-    def convert_row(self, row_idx: int) -> str:
+    def convert_row(self, row_idx: int, mzML_rows) -> str:
         """
         Creates an maxquant params file the sample at the given row of the SDRF file.
         
@@ -94,10 +94,15 @@ class maxquantConverter(AbstractConverter):
             xml_filePaths = xml_params.find('filePaths')
         except:
             raise TypeError("path to MzMLs doesn't exist")
-        
-        ET.SubElement(xml_filePaths, "string").text = str(raw_files_path_str + "/" + self.sdrf_df.iloc[row_idx]['comment[data file]'])
-
-
+        for mzML in mzML_rows:
+            related_mzML_row: pd.DataFrame = self.sdrf_df.iloc[mzML]
+            ET.SubElement(xml_filePaths, "string").text = str(raw_files_path_str + "/" + related_mzML_row['comment[data file]'].split('.')[0] + ".mzML")
+            ET.SubElement(xml_params.find('experiments'), "string").text = "L1"
+            ET.SubElement(xml_params.find('fractions'), "short").text = "32767"
+            ET.SubElement(xml_params.find('ptms'), "boolean").text = "False"
+            ET.SubElement(xml_params.find('paramGroupIndices'), "int").text = "0"
+            ET.SubElement(xml_params.find('referenceChannel'), "string")
+            
         #fasta file details
         fasta_path : Path = Path(self.fasta_file)
         xml_params.find('fastaFiles').find('FastaFileInfo').find('fastaFilePath').text = str(fasta_path.absolute())
@@ -191,11 +196,14 @@ class maxquantConverter(AbstractConverter):
 
         # init
         self.init_converter(sdrf)
-
+        #group sdrf entrys
+        grouping: pd.core.groupby.DataFrameGroupBy = self.get_grouping()
+        
         
         #create and return config.json for each row
-        for row_idx in range(0, len(self.sdrf_df)):
-            yield self.sdrf_df.iloc[row_idx]['comment[data file]'] + ".maxquant_input.xml", self.convert_row(row_idx)
+        for _, rows in grouping.groups.items():
+            grouped_df = self.sdrf_df.iloc[rows]
+            yield self.sdrf_df.iloc[row_idx]['comment[data file]'] + ".maxquant_input.xml", self.convert_row(grouped_df.index[0], grouped_df.index)
 
 
 
