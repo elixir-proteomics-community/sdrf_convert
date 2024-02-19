@@ -47,7 +47,8 @@ class maxquantConverter(AbstractConverter):
                  maxquant_files_path: str = "./",
                  output_path: str = "./maxquant_identification_",
                  max_missed_cleavages: int = 2,
-                 max_threads: int = 4):
+                 max_threads: int = 4,
+                 group_similar_searches: bool = False):
         """
         Creates a new instance of the CometConverter class
 
@@ -62,6 +63,7 @@ class maxquantConverter(AbstractConverter):
         self.output_path : str = output_path
         self.max_missed_cleavages: int = max_missed_cleavages
         self.max_threads: int = max_threads
+        self.group_similar_searches: bool = group_similar_searches
 
 
 
@@ -176,7 +178,24 @@ class maxquantConverter(AbstractConverter):
 
         
             
+    def get_grouping(self) -> pd.core.groupby.DataFrameGroupBy:
+        """
+        Groups samples by assay nae or by similar search parameters.
 
+        Returns
+        -------
+        pd.core.groupby.DataFrameGroupBy
+            Grouped samples
+        """
+        if not self.group_similar_searches:
+            return self.sdrf_df.groupby(["assay name"])
+        # Collect columns with search params
+        search_param_cols: Set[str] = set(self.COLUMN_PROPERTIES.keys())
+        search_param_cols.update(self.present_optional_columns)
+        search_param_cols.remove('assay name')
+        search_param_cols.remove('source name')
+        search_param_cols.remove('comment[data file]')
+        return self.sdrf_df.groupby(list(search_param_cols))
 
     def convert(self, sdrf: Union[pd.DataFrame, IOBase, Path]) -> Iterator[Tuple[str, str]]:
         """
@@ -203,7 +222,7 @@ class maxquantConverter(AbstractConverter):
         #create and return config.json for each row
         for _, rows in grouping.groups.items():
             grouped_df = self.sdrf_df.iloc[rows]
-            yield self.sdrf_df.iloc[row_idx]['comment[data file]'] + ".maxquant_input.xml", self.convert_row(grouped_df.index[0], grouped_df.index)
+            yield self.sdrf_df.iloc[grouped_df.index[0]]['comment[data file]'] + ".maxquant_input.xml", self.convert_row(grouped_df.index[0], grouped_df.index)
 
 
 
@@ -216,7 +235,8 @@ class maxquantConverter(AbstractConverter):
             maxquant_files_path=cli_args.maxquant_files_path,
             output_path=cli_args.output_path,
             max_missed_cleavages=cli_args.max_missed_cleavages,
-            max_threads=cli_args.max_threads
+            max_threads=cli_args.max_threads,
+            group_similar_searches=cli_args.group_similar_searches
         )
 
 
@@ -254,5 +274,8 @@ class maxquantConverter(AbstractConverter):
         )
         tool_parser.add_argument(
             "-t", "--max-threads", default=4, type=int, action="store", metavar="X", help="Maximum number of used threads for teh identification"
+        )
+        tool_parser.add_argument(
+            "-g", "--group-similar-searches", default=False, type=bool, action="store", metavar="X", help="Bool weather or not search parameters should be gruped"
         )
         tool_parser.set_defaults(func=cls.convert_via_cli)
