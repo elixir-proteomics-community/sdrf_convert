@@ -269,7 +269,7 @@ class XTandemConverter(AbstractConverter):
 
         for col_name in self.find_columns(self.sdrf_df, 'comment[modification parameters]*'):
             modification_dict = self.ontology_str_to_dict(sample[col_name])
-            mod = self.get_unimod_from_NT(modification_dict['NT'])
+            mod = self.get_unimod_from_nt(modification_dict['NT'])
             type = "variable"
             if modification_dict['MT'] and modification_dict['MT'].casefold() == "fixed":
                 type = "fixed"

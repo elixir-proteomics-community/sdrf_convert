@@ -14,7 +14,7 @@ import warnings
 
 # 3rd party imports
 import pandas as pd
-from pyteomics.mass.unimod import Unimod
+from pyteomics.mass.unimod import Unimod # type: ignore
 
 # internal imports
 from sdrf_convert.abstract_converter import AbstractConverter
