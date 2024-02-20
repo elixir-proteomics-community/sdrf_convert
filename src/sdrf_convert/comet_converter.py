@@ -10,6 +10,7 @@ from io import IOBase
 from pathlib import Path
 import re
 from typing import Any, ClassVar, Dict, Iterator, List, Set, Tuple, Type, Union
+import warnings
 
 # 3rd party imports
 import pandas as pd
@@ -121,7 +122,9 @@ class CometConverter(AbstractConverter):
         self.comet_params = self.cleanup_params(comet_params)
         self.max_variable_modification = max_variable_modification
         self.group_similar_searches = group_similar_searches
-        self.unimod = Unimod()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.unimod = Unimod()
 
 
 
