@@ -54,9 +54,31 @@ class CometConverter(AbstractConverter):
         "MS:1001917": 8,    # GluC
         "MS:1001311": 9,    # PepsinA
         "MS:1001306": 10,   # Chymotrypsin
-        "MS:1001955": 11    # No cleavage / No_cut
+        "MS:1001955": 11,    # No cleavage / No_cut
     }
-    """Cleavage enzymes mapped to COMET_ENZYM_INFO
+    """Cleavage enzymes ontology mapped to COMET_ENZYM_INFO
+    """
+
+    ONTOLOGY_TERM_COMET_ENZYM_MAP: ClassVar[Dict[str, int]] = {
+        "unspecific cleavage": 0,       # unspecified cleavage / Cut_everywhere
+        "trypsin": 1,                   # Trypsin
+        "trypsin/p": 2,                 # Trypsin/P
+        "lys-c": 3,                     # LysC
+        "trypsin/K": 3,                 # LysC
+        "lys-n": 4,                     # LysN
+        "arg-c": 5,                     # ArgC
+        "clostripain": 5,               # ArgC
+        "trypsin/r": 5,                 # ArgC
+        "asp-n": 6,                     # AspN
+        "cnbr": 7,                      # CNBr
+        "glutamyl endopeptidase": 8,    # GluC
+        "gluc": 8,                      # GluC
+        "staphylococcal protease": 8,   # GluC
+        "pepsina": 9,                   # PepsinA
+        "chymotrypsin": 10,             # Chymotrypsin
+        "no cleavage": 11,              # No cleavage / No_cut
+    }
+    """Cleavage enzymes names and synonymes mapped to COMET_ENZYM_INFO
     """
 
 
@@ -81,8 +103,7 @@ class CometConverter(AbstractConverter):
             If False each it will be grouped by assay name. By default False
         """
         super().__init__()
-        self.comet_params = comet_params
-        # self.comet_params = self.cleanup_params(self.comet_params) # TODO implement cleanup
+        self.comet_params = self.cleanup_params(comet_params)
         self.group_similar_searches = group_similar_searches
 
 
@@ -104,10 +125,33 @@ class CometConverter(AbstractConverter):
         sample_file_path = Path(data_file)
         sample_file_name = sample_file_path.name
         return sample_file_name.replace(" ", "\\ ")
-
-    def cleanup_params(self, params: str) -> str:
+    
+    @classmethod
+    def set_param(cls, config: str, param_name: str, value: str) -> str:
         """
-        Some parameters are preconfigured and need should be cleaned up
+        Set a parameter in a Comet parameter file.
+        Keeps the comment if present.
+
+        Parameters
+        ----------
+        config : str
+            Comet parameter file content
+        param_name : str
+            Name of the parameter to set
+        value : str
+            Value to set
+        
+        Returns
+        -------
+        str
+        """
+
+        pattern: re.Pattern = re.compile(f"^{param_name} = .+?($|#.+$)", re.MULTILINE)
+        return re.sub(pattern, f"{param_name} = {value}    \\1", config)
+
+    def cleanup_params(self, config: str) -> str:
+        """
+        Some parameters are preconfigured and should be cleaned up
         before values from SDRF are inserted.
 
         Parameters
@@ -120,7 +164,11 @@ class CometConverter(AbstractConverter):
         str
             Cleaned up Comet parameter file content
         """
-        raise NotImplementedError("Not implemented yet")
+
+        # Unset default modifications
+        cleaned_config: str = self.set_param(config, "variable_mod01", "0.0 X 0 3 -1 0 0 0.0")
+        return self.set_param(cleaned_config, "add_C_cysteine", "0.0000")
+
 
     def convert_modifications(self, sample: pd.DataFrame) -> Iterator[Tuple[re.Pattern, str]]:
         """
@@ -163,9 +211,28 @@ class CometConverter(AbstractConverter):
         cleavage_agent_details_dict = self.ontology_str_to_dict(
             sample['comment[cleavage agent details]']
         )
-        cleavage_agent_num: int = self.COMET_ENZYM_INFO_MAP[
-            cleavage_agent_details_dict['AC']
-        ]
+        cleavage_agent_lookup_errors: List[str] = []
+        cleavage_agent_num: int = -1
+        # Check AC first
+        if 'AC' in cleavage_agent_details_dict:
+            try:
+                cleavage_agent_num = self.ONTOLOGY_ID_COMET_ENZYM_MAP[
+                    cleavage_agent_details_dict['AC']
+                ]
+            except KeyError:
+                cleavage_agent_lookup_errors.append(f"AC '{cleavage_agent_details_dict['AC']}' is unknown for Comet")
+        # if cleavage agent is not found by AC, try NT
+        if cleavage_agent_num == -1 and 'NT' in cleavage_agent_details_dict:
+            try:
+                cleavage_agent_num = self.ONTOLOGY_TERM_COMET_ENZYM_MAP[
+                    cleavage_agent_details_dict['NT'].lower()
+                ]
+            except KeyError:
+                cleavage_agent_lookup_errors.append(f"NT '{cleavage_agent_details_dict['NT']}' is unknown for Comet")
+        # if cleavage agent is not found by AC or NT, raise error
+        if cleavage_agent_num == -1:
+            cleavage_agent_lookup_errors_message = "\n\t- ".join(cleavage_agent_lookup_errors)
+            raise ValueError(f"Invalid cleavage agent: {sample['comment[cleavage agent details]']}.\n\t- {cleavage_agent_lookup_errors_message}")
         sample_config = re.sub(
             r"search_enzyme_number = \d",
             f"search_enzyme_number = {cleavage_agent_num}", sample_config
