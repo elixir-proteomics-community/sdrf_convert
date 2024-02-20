@@ -98,7 +98,7 @@ class maxquantConverter(AbstractConverter):
             raise TypeError("path to MzMLs doesn't exist")
         for mzML in mzML_rows:
             related_mzML_row: pd.DataFrame = self.sdrf_df.iloc[mzML]
-            ET.SubElement(xml_filePaths, "string").text = str(raw_files_path_str + "/" + related_mzML_row['comment[data file]'].split('.')[0] + ".mzML")
+            ET.SubElement(xml_filePaths, "string").text = str(raw_files_path_str + "/" + related_mzML_row['comment[data file]'].split('.')[0] + ".raw")
             ET.SubElement(xml_params.find('experiments'), "string").text = "L1"
             ET.SubElement(xml_params.find('fractions'), "short").text = "32767"
             ET.SubElement(xml_params.find('ptms'), "boolean").text = "False"
