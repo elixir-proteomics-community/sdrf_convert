@@ -43,7 +43,7 @@ class CometConverter(AbstractConverter):
     """
 
     COMET_ENZYM_INFO_MAP: ClassVar[Dict[str, int]] = {
-        "MS:1001045": 0,    # unspecified cleavage / Cut_everywhere TODO: check if this is correct
+        "MS:1001956": 0,    # unspecified cleavage / Cut_everywhere
         "MS:1001251": 1,    # Trypsin
         "MS:1001313": 2,    # Trypsin/P
         "MS:1001309": 3,    # LysC
