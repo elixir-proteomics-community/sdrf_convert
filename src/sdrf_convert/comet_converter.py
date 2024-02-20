@@ -357,7 +357,6 @@ class CometConverter(AbstractConverter):
             str(self.max_variable_modification)
         )
         for (pattern, replacement) in self.convert_modifications(sample):
-            print(pattern, replacement)
             sample_config = re.sub(pattern, replacement, sample_config)
 
         sample_file_name = self.get_escaped_basename_of_data_file(sample['comment[data file]'])
