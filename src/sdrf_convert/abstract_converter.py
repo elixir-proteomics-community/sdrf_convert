@@ -6,6 +6,7 @@ Abstract class for SDRF file converters.
 import argparse
 from io import IOBase
 from pathlib import Path
+import re
 from typing import Any, ClassVar, Dict, List, Set, Type, Union
 
 # 3rd party imports
@@ -31,6 +32,10 @@ class AbstractConverter:
     """Columns which are optional.
     If a column may occurs multiple times, add a star at the end of the column name
     (e.g. "comment[modification parameters]*")
+    """
+
+    MODIFICATION_TA_CLEANUP: ClassVar[re.Pattern] = re.compile(r"[^A-Z,]")
+    """Maches everything which is not a capital letter or a comma
     """
 
     def __init__(self):
@@ -205,6 +210,29 @@ class AbstractConverter:
             mod = self.unimod_db.by_name(nt_entry)
         
         return mod
+    
+    @classmethod
+    def get_plain_modification_targets(cls, targets: str) -> List[str]:
+        """
+        Clean up and splits the TA attribute of the a modification value.
+        TA is defined as: `TA=F,R,...`
+        Some tools save it as `TA=['F', 'R', ...]` (seems to be a Python list representation)
+
+        Parameters
+        ----------
+        targets : str
+            TA attribute of the modification value
+
+        Returns
+        -------
+        List[str]
+            _description_
+        """
+        cleaned_targets = re.sub(cls.MODIFICATION_TA_CLEANUP, "", targets)
+        return [
+            target.strip()
+            for target in cleaned_targets.split(",")
+        ]
 
     def init_converter(self, sdrf: Union[pd.DataFrame, IOBase, Path]):
         """

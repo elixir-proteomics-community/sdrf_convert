@@ -5,16 +5,28 @@ Module for converting SDRF files to Comet params files and CLI calls
 # std imports
 import argparse
 from copy import deepcopy
+from enum import IntEnum, unique
 from io import IOBase
 from pathlib import Path
 import re
-from typing import ClassVar, Dict, Iterator, List, Set, Tuple, Type, Union
+from typing import Any, ClassVar, Dict, Iterator, List, Set, Tuple, Type, Union
 
 # 3rd party imports
 import pandas as pd
+from pyteomics.mass.unimod import Unimod
 
 # internal imports
 from sdrf_convert.abstract_converter import AbstractConverter
+
+@unique
+class CometVarModTerminal(IntEnum):
+    """
+    Enum for Comet variable modification terminal constraints
+    """
+    PROTEIN_N = 0
+    PROTEIN_C = 1
+    PEPTIDE_N = 2
+    PEPTIDE_C = 3
 
 class CometConverter(AbstractConverter):
     """
@@ -81,12 +93,15 @@ class CometConverter(AbstractConverter):
     """Cleavage enzymes names and synonymes mapped to COMET_ENZYM_INFO
     """
 
+    MAX_VAR_MODS: ClassVar[int] = 9
+    """Maximum number of variable modifications per sample
+    """
 
     def __init__(
         self,
         comet_params: str,
+        max_variable_modification: int,
         group_similar_searches: bool = False,
-
     ):
         """
         Creates a new instance of the CometConverter class
@@ -104,7 +119,9 @@ class CometConverter(AbstractConverter):
         """
         super().__init__()
         self.comet_params = self.cleanup_params(comet_params)
+        self.max_variable_modification = max_variable_modification
         self.group_similar_searches = group_similar_searches
+        self.unimod = Unimod()
 
 
 
@@ -146,8 +163,8 @@ class CometConverter(AbstractConverter):
         str
         """
 
-        pattern: re.Pattern = re.compile(f"^{param_name} = .+?($|#.+$)", re.MULTILINE)
-        return re.sub(pattern, f"{param_name} = {value}    \\1", config)
+        pattern: re.Pattern = re.compile(fr"^{param_name} = .+?$", re.MULTILINE)
+        return re.sub(pattern, fr"{param_name} = {value}", config)
 
     def cleanup_params(self, config: str) -> str:
         """
@@ -173,6 +190,8 @@ class CometConverter(AbstractConverter):
     def convert_modifications(self, sample: pd.DataFrame) -> Iterator[Tuple[re.Pattern, str]]:
         """
         Converts modifications from SDRF to Comet format.
+        It is necessary to to now the monoisotopic mass (MM) of the modification and if it is fixed or variable (MT).
+        If MT is missing an error is raised. If MM is missing, the Unimod database is queried. If the modification is not found an error is raised.
 
         Parameters
         ----------
@@ -182,14 +201,79 @@ class CometConverter(AbstractConverter):
         Yields
         ------
         Iterator[Tuple[re.Pattern, str]]
-            Pattern for replacing the modification in the params file and th
+            Pattern for finding the param and replacement including the value
         """
+        # Convert modifications
+        fix_mod_table: List[Dict[str, Any]] = []
+        var_mod_table: List[Dict[str, Any]] = []
         for col_name in self.find_columns(self.sdrf_df, 'comment[modification parameters]*'):
-            modification_dict = self.ontology_str_to_dict(sample[col_name])
-            _mod_accession = modification_dict['AC']
-            # TODO: Include pyteomics for unimod lookup
-            # TODO: Add converter parameter for custom modifications
-            raise NotImplementedError("Not implemented yet")
+            mod = self.ontology_str_to_dict(sample[col_name])
+            # if MT is missing, raise error as the information can not be found in Unimod
+            if 'MT' not in mod:
+                raise ValueError((
+                    f"Invalid modification parameters in sample {sample['source name']}: {sample[col_name]}. "
+                    "MT attribute is not mandatory for SDRF but for Comet we need to now."
+                )) 
+            # if MM is missing, query Unimod and check if the modification is found
+            if 'MM' not in mod:
+                umod = self.unimod.get(mod['NT'])
+                if umod is not None:
+                    mod['MM'] = umod.monoisotopic_mass
+                else:
+                    raise ValueError((
+                        f"Invalid modification parameters in sample {sample['source name']}: {sample[col_name]}. "
+                        "MM attribute is not mandatory for SDRF but for Comet we need to now. "
+                        f"Could not find Unimod entry for {mod['NT']}."
+                    ))
+            # Sort into fixed and variable modifications
+            if mod['MT'].lower() == 'fixed':
+                fix_mod_table.append(mod)
+            else:
+                var_mod_table.append(mod)
+
+        # Convert modifications to Comet format
+        var_mod_counter: int = 0
+        for mod in var_mod_table:
+            # Comma separated list of target amino acids
+            targets = ",".join(self.get_plain_modification_targets(mod["TA"]))
+            # Distance constraint to terminal, default -1 for anywhere
+            dist_constraint = -1
+            # List if terminal constraints. For any N/C-term, two separate entries are needed in the params file
+            terminals = [CometVarModTerminal.PROTEIN_N] # only protein N-term, ignored when dist_constraint is -1
+            if 'PP' in mod:
+                match mod['PP'].lower():
+                    case "protein n-term":
+                        dist_constraint = 0
+                        terminals = [CometVarModTerminal.PROTEIN_N]
+                    case "protein c-term":
+                        dist_constraint = 0
+                        terminals = [CometVarModTerminal.PROTEIN_C]
+                    case "any n-term":
+                        dist_constraint = 0
+                        terminals = [CometVarModTerminal.PROTEIN_N, CometVarModTerminal.PEPTIDE_N]
+                    case "any c-term":
+                        dist_constraint = 0
+                        terminals = [CometVarModTerminal.PROTEIN_C, CometVarModTerminal.PEPTIDE_C]
+    
+            for terminal in terminals:
+                var_mod_counter += 1
+                # Check if we exceed the maximum number of variable modifications
+                if var_mod_counter > self.MAX_VAR_MODS:
+                    raise ValueError(f"Too many variable modifications in sample {sample['source name']}")
+                # Yield match pattern and replacement for variable modifications
+                yield (
+                    re.compile(fr"^(variable_mod0{var_mod_counter} =) .+?$", re.MULTILINE),
+                    fr"\1 {mod['MM']} {targets} 0 {self.max_variable_modification} {dist_constraint} {terminal.value} 0 0.0"
+                )
+
+        # Yield match patterns and replacements for fixed modifications 
+        for mod in fix_mod_table:
+            for target in self.get_plain_modification_targets(mod["TA"]):
+                yield (
+                    re.compile(fr"^(add_{target}_[a-z]+ =) .+?$", re.MULTILINE),
+                    fr"\1 {mod['MM']}"
+                )
+
 
     def convert_sample(self, row_idx: int) -> Tuple[str, str]:
         """
@@ -233,22 +317,25 @@ class CometConverter(AbstractConverter):
         if cleavage_agent_num == -1:
             cleavage_agent_lookup_errors_message = "\n\t- ".join(cleavage_agent_lookup_errors)
             raise ValueError(f"Invalid cleavage agent: {sample['comment[cleavage agent details]']}.\n\t- {cleavage_agent_lookup_errors_message}")
-        sample_config = re.sub(
-            r"search_enzyme_number = \d",
-            f"search_enzyme_number = {cleavage_agent_num}", sample_config
+        sample_config = self.set_param(
+            sample_config,
+            "search_enzyme_number",
+            str(cleavage_agent_num)
         )
 
         # set peptide mass tolerance and unit
         peptide_mass_tolerance_split: str = sample['comment[precursor mass tolerance]'].split()
         peptide_mass_tolerance = float(peptide_mass_tolerance_split[0])
         peptide_mass_tolerance_unit = self.COMET_UNITS[peptide_mass_tolerance_split[1]]
-        sample_config = re.sub(
-            r"peptide_mass_tolerance = \d+(.\d+){0,1}",
-            f"peptide_mass_tolerance = {peptide_mass_tolerance}", sample_config
+        sample_config = self.set_param(
+            sample_config,
+            "peptide_mass_tolerance",
+            str(peptide_mass_tolerance)
         )
-        sample_config = re.sub(
-            r"peptide_mass_units = \d",
-            f"peptide_mass_units = {peptide_mass_tolerance_unit}", sample_config
+        sample_config = self.set_param(
+            sample_config,
+            "peptide_mass_units",
+            str(peptide_mass_tolerance_unit)
         )
 
         # set fragment mass tolerance and unit
@@ -257,10 +344,21 @@ class CometConverter(AbstractConverter):
         fragment_mass_tolerance_unit = fragment_mass_tolerance_split[1]
         if fragment_mass_tolerance_unit.lower()== "amu":
             fragment_mass_tolerance = fragment_mass_tolerance / 1000
-        sample_config = re.sub(
-            r"peptide_mass_tolerance = \d.\d",
-            f"peptide_mass_tolerance = {fragment_mass_tolerance}", sample_config
+        sample_config = self.set_param(
+            sample_config,
+            "peptide_mass_tolerance",
+            str(fragment_mass_tolerance)
         )
+
+        # set modifications
+        sample_config = self.set_param(
+            sample_config,
+            "max_variable_mods_in_peptide",
+            str(self.max_variable_modification)
+        )
+        for (pattern, replacement) in self.convert_modifications(sample):
+            print(pattern, replacement)
+            sample_config = re.sub(pattern, replacement, sample_config)
 
         sample_file_name = self.get_escaped_basename_of_data_file(sample['comment[data file]'])
         cli_string: str = f"-P<PARAMS> -D<FASTA> {sample_file_name}"
@@ -325,13 +423,15 @@ class CometConverter(AbstractConverter):
         comet_params: str = Path(cli_args.comet_params).read_text()
         converter = CometConverter(
             comet_params,
-            cli_args.group_similar_searches
+            cli_args.max_variable_modification,
+            cli_args.group_similar_searches,
         )
         converter.convert(cli_args.sdrf_file)
     
     @classmethod
     def add_cli_args(cls, subparsers: argparse._SubParsersAction):
         tool_parser = subparsers.add_parser("comet", help="SDRF to config converter for Comet")
+        tool_parser.add_argument("max_variable_modification", type=int, help="Max. number of variable modifications per sample (will be applied to all var. modification)")
         tool_parser.add_argument("comet_params", help="Comet params file")
         tool_parser.add_argument(
             "-g", "--group-similar-searches", default=False, action="store_true", help="Group samples with equal search parameters in one config file and CLI command"
