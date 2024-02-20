@@ -11,7 +11,7 @@ from typing import Any, ClassVar, Dict, List, Set, Type, Union
 
 # 3rd party imports
 import pandas as pd
-from pyteomics import mass
+from pyteomics import mass # type: ignore
 
 SDRF_CELL_SEPARATOR: str = "\t"
 """Separator used in SDRF file
@@ -140,7 +140,7 @@ class AbstractConverter:
             }
         """
         ontology_dict: Dict[str, str] = {}
-        ontology_split: str = ontology_str.split(";")
+        ontology_split: List[str] = ontology_str.split(";")
         for elem in ontology_split:
             elem = elem.strip()
             if elem == "":
@@ -186,7 +186,7 @@ class AbstractConverter:
             } # Use the first accepted dtype for each column
         )
     
-    def get_unimod_from_NT(self, nt_entry: str) -> Dict[str, Any]:
+    def get_unimod_from_nt(self, nt_entry: str) -> Dict[str, Any]:
         """
         Uses the given nt_entry for a query to Unimod (by pyteomics) and
         returns the resulting entry, or an empty record, if no corresponding

@@ -16,7 +16,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pylint"
+    "pylint",
+    "pandas-stubs"
 ]
 
 
