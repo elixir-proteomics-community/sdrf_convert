@@ -54,7 +54,7 @@ class CometConverter(AbstractConverter):
     """Comet representation of mass tolerance units
     """
 
-    COMET_ENZYM_INFO_MAP: ClassVar[Dict[str, int]] = {
+    ONTOLOGY_ID_COMET_ENZYM_MAP: ClassVar[Dict[str, int]] = {
         "MS:1001956": 0,    # unspecified cleavage / Cut_everywhere
         "MS:1001251": 1,    # Trypsin
         "MS:1001313": 2,    # Trypsin/P
@@ -254,7 +254,7 @@ class CometConverter(AbstractConverter):
                     case "any c-term":
                         dist_constraint = 0
                         terminals = [CometVarModTerminal.PROTEIN_C, CometVarModTerminal.PEPTIDE_C]
-    
+
             for terminal in terminals:
                 var_mod_counter += 1
                 # Check if we exceed the maximum number of variable modifications
@@ -275,7 +275,7 @@ class CometConverter(AbstractConverter):
                 )
 
 
-    def convert_sample(self, row_idx: int) -> Tuple[str, str]:
+    def convert_sample(self, row_idx: int) -> Tuple[str, str, str]:
         """
         Creates a Comet CLI call and params file for the given sample.
 
@@ -285,8 +285,8 @@ class CometConverter(AbstractConverter):
 
         Returns
         -------
-        Tuple[str, str]
-            _description_
+        Tuple[str, str, str]
+            Tuple containing the CLI call, content of the Comet param file and the base name of the data file
         """
         sample: pd.DataFrame = self.sdrf_df.iloc[row_idx]
         sample_config: str = deepcopy(self.comet_params)
@@ -363,7 +363,7 @@ class CometConverter(AbstractConverter):
         sample_file_name = self.get_escaped_basename_of_data_file(sample['comment[data file]'])
         cli_string: str = f"-P<PARAMS> -D<FASTA> {sample_file_name}"
 
-        return cli_string, sample_config
+        return cli_string, sample_config, sample_file_name
 
 
     def get_grouping(self) -> pd.core.groupby.DataFrameGroupBy:
@@ -384,9 +384,26 @@ class CometConverter(AbstractConverter):
         search_param_cols.remove('source name')
         search_param_cols.remove('comment[data file]')
         return self.sdrf_df.groupby(list(search_param_cols))
+    
+    @classmethod
+    def get_clean_group_label(cls, group_label: str) -> str:
+        """
+        Cleans group label from special characters
+
+        Parameters
+        ----------
+        group_label : str
+            Group label to clean
+
+        Returns
+        -------
+        str
+            Cleaned group label
+        """
+        return re.sub(r"[^a-zA-Z0-9]", "_", group_label)
 
 
-    def convert(self, sdrf: Union[pd.DataFrame, IOBase, Path]) -> Iterator[Tuple[str, str]]:
+    def convert(self, sdrf: Union[pd.DataFrame, IOBase, Path]) -> Iterator[Tuple[str, str, str]]:
         """
         Convert SDRF file to Comet CLI string and corresponding input file.
 
@@ -397,25 +414,29 @@ class CometConverter(AbstractConverter):
         
         Returns
         -------
-        (str, str)
-            Tuple containing the CLI call and content of the Comet input files
-            (cli call, comet.params content)
+        (str, str, str)
+            Tuple containing the CLI call, content of the Comet input files and the and ID for the params file
+            if group_similar_searches is True, the ID is the group index, otherwise it is the sample file name.
+            (cli call, comet.params content, params file ID)
         """
         # init
         self.init_converter(sdrf)
 
         # Group rows by search params
         grouping: pd.core.groupby.DataFrameGroupBy = self.get_grouping()
-        for _, rows in grouping.groups.items():
+        for group_idx, (_, rows) in enumerate(grouping.groups.items()):
             grouped_df = self.sdrf_df.iloc[rows]
+            # # Create an identifier. If not grouping by similar searches, use assay name
+            # identifier = grouped_df.iloc[0]["assay name"] if not self.group_similar_searches else group_counter
             # create CLI call and params based on first row of group...
-            cli_str, params = self.convert_sample(grouped_df.index[0])
+            cli_str, params, sample_file_name = self.convert_sample(grouped_df.index[0])
             # ... and append the data files of the other rows
             for row_idx in grouped_df.index[1:]:
                 cli_str += " " + self.get_escaped_basename_of_data_file(
                     grouped_df.loc[row_idx, "comment[data file]"]
                 )
-            yield cli_str, params
+            params_file_id: str = self.get_clean_group_label(f"{group_idx}") if self.group_similar_searches else f"{sample_file_name}"
+            yield cli_str, params, params_file_id
 
     @classmethod
     def convert_via_cli(cls, cli_args: argparse.Namespace):
@@ -426,13 +447,17 @@ class CometConverter(AbstractConverter):
             cli_args.max_variable_modification,
             cli_args.group_similar_searches,
         )
-        converter.convert(cli_args.sdrf_file)
+        config_folder = Path(cli_args.config_folder)
+        for cli_str, params, params_file_id in converter.convert(Path(cli_args.sdrf_file)):
+            print(cli_str)
+            config_folder.joinpath(f"{params_file_id}.comet.params").write_text(params, encoding="utf-8")
     
     @classmethod
     def add_cli_args(cls, subparsers: argparse._SubParsersAction):
-        tool_parser = subparsers.add_parser("comet", help="SDRF to config converter for Comet")
+        tool_parser = subparsers.add_parser("comet", help="SDRF to config converter for Comet. Monoisotopic mass and information about fixed or variable is necessary for PTMs.")
         tool_parser.add_argument("max_variable_modification", type=int, help="Max. number of variable modifications per sample (will be applied to all var. modification)")
         tool_parser.add_argument("comet_params", help="Comet params file")
+        tool_parser.add_argument("config_folder", help="Folder to store the generated config files")
         tool_parser.add_argument(
             "-g", "--group-similar-searches", default=False, action="store_true", help="Group samples with equal search parameters in one config file and CLI command"
         )
