@@ -7,11 +7,12 @@ import argparse
 from collections import defaultdict
 from io import IOBase, StringIO, BytesIO
 from pathlib import Path
+import re
 from typing import Any, ClassVar, Dict, List, Set, Type, Union
 
 # 3rd party imports
 import pandas as pd
-from pyteomics import mass
+from pyteomics import mass # type: ignore
 
 SDRF_CELL_SEPARATOR: str = "\t"
 """Separator used in SDRF file
@@ -33,6 +34,10 @@ class AbstractConverter:
     """Columns which are optional.
     If a column may occurs multiple times, add a star at the end of the column name
     (e.g. "comment[modification parameters]*")
+    """
+
+    MODIFICATION_TA_CLEANUP: ClassVar[re.Pattern] = re.compile(r"[^A-Z,]")
+    """Maches everything which is not a capital letter or a comma
     """
 
     def __init__(self):
@@ -138,7 +143,7 @@ class AbstractConverter:
             }
         """
         ontology_dict: Dict[str, str] = {}
-        ontology_split: str = ontology_str.split(";")
+        ontology_split: List[str] = ontology_str.split(";")
         for elem in ontology_split:
             elem = elem.strip()
             if elem == "":
@@ -281,7 +286,7 @@ class AbstractConverter:
 
         return sdrf_df
     
-    def get_unimod_from_NT(self, nt_entry: str) -> Dict[str, Any]:
+    def get_unimod_from_nt(self, nt_entry: str) -> Dict[str, Any]:
         """
         Uses the given nt_entry for a query to Unimod (by pyteomics) and
         returns the resulting entry, or an empty record, if no corresponding
@@ -305,6 +310,29 @@ class AbstractConverter:
             mod = self.unimod_db.by_name(nt_entry)
         
         return mod
+    
+    @classmethod
+    def get_plain_modification_targets(cls, targets: str) -> List[str]:
+        """
+        Clean up and splits the TA attribute of the a modification value.
+        TA is defined as: `TA=F,R,...`
+        Some tools save it as `TA=['F', 'R', ...]` (seems to be a Python list representation)
+
+        Parameters
+        ----------
+        targets : str
+            TA attribute of the modification value
+
+        Returns
+        -------
+        List[str]
+            _description_
+        """
+        cleaned_targets = re.sub(cls.MODIFICATION_TA_CLEANUP, "", targets)
+        return [
+            target.strip()
+            for target in cleaned_targets.split(",")
+        ]
 
     def init_converter(self, sdrf: Union[pd.DataFrame, IOBase, Path]):
         """
