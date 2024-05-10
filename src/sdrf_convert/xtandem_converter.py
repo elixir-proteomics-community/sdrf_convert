@@ -438,6 +438,6 @@ class XTandemConverter(AbstractConverter):
             "-c", "--max-parent-charge", default=4, type=int, action="store", metavar="X", help="Maximum charge state of the parent mass"
         )
         tool_parser.add_argument(
-            "-t", "--max-threads", default=4, type=int, action="store", metavar="X", help="Maximum number of used threads for teh identification"
+            "-t", "--max-threads", default=4, type=int, action="store", metavar="X", help="Maximum number of used threads for the identification"
         )
         tool_parser.set_defaults(func=cls.convert_via_cli)
