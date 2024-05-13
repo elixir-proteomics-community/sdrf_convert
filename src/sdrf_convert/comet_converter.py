@@ -337,6 +337,16 @@ class CometConverter(AbstractConverter):
         )
         sample_config = self.set_param(
             sample_config,
+            "peptide_mass_tolerance_lower",
+            str(peptide_mass_tolerance)
+        )
+        sample_config = self.set_param(
+            sample_config,
+            "peptide_mass_tolerance_upper",
+            str(peptide_mass_tolerance)
+        )
+        sample_config = self.set_param(
+            sample_config,
             "peptide_mass_units",
             str(peptide_mass_tolerance_unit)
         )
