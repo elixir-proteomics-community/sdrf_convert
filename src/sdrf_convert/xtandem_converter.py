@@ -299,7 +299,7 @@ class XTandemConverter(AbstractConverter):
             if len(variable_mods_str) > 0:
                 variable_mods_str += ","
             variable_mods_str += mod
-        ET.SubElement(xml_params, "note", type="input", label="potential modification mass").text = variable_mods_str
+        ET.SubElement(xml_params, "note", type="input", label="residue, potential modification mass").text = variable_mods_str
 
         # add quick modifications
         ET.SubElement(xml_params, "note", type="input", label="protein, quick acetyl").text = "yes" if mods["quick_acetyl"] else "no"
